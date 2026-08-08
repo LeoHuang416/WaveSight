@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, Button, Input, Select, Space, Typography, Empty, Tag, Popconfirm, message, Radio } from 'antd';
 import { PlusOutlined, DeleteOutlined, DownloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
+import 'echarts-gl';
 import { useChartStore } from '@/stores/useChartStore';
 import { useDataStore } from '@/stores/useDataStore';
 import { exportPNG, exportCSV } from '@/utils/export';
@@ -253,49 +254,57 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       };
     }
     case 'surface3d': {
-      // 3D surface approximated as 2D heatmap grid
+      // Real 3D surface via echarts-gl
       const sx = nums[0], sy = nums[1] ?? nums[0];
       const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
-      if (sData.length < 5) return { ...base, series: [{ type: 'heatmap', data: [] }] };
+      if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
       const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]);
       const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
-      const gridSize = 15;
+      const gridSize = 20;
       const xStep = (xMax - xMin) / gridSize || 1;
       const yStep = (yMax - yMin) / gridSize || 1;
-      const xLabels = Array.from({ length: gridSize }, (_, i) => (+(xMin + i * xStep + xStep / 2).toFixed(1)).toString());
-      const yLabels = Array.from({ length: gridSize }, (_, i) => (+(yMin + i * yStep + yStep / 2).toFixed(1)).toString());
-      const surfData: [number, number, number][] = [];
+
+      // Aggregate z-values into grid cells
+      const gridCount: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+      const gridSum: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
       sData.forEach(([x, y]) => {
         const xi = Math.min(Math.floor((x - xMin) / xStep), gridSize - 1);
         const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
-        surfData.push([xi, yi, 1]); // Count per cell
+        gridSum[yi][xi] += y;
+        gridCount[yi][xi]++;
       });
-      // Aggregate: average the z-values per cell
-      const gridZ: Map<string, number[]> = new Map();
-      sData.forEach(([x, y]) => {
-        const xi = Math.min(Math.floor((x - xMin) / xStep), gridSize - 1);
-        const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
-        const key = `${xi},${yi}`;
-        if (!gridZ.has(key)) gridZ.set(key, []);
-        gridZ.get(key)!.push(y); // Use y as "height"
-      });
-      const aggData: [number, number, number][] = [];
-      gridZ.forEach((vals, key) => {
-        const [xi, yi] = key.split(',').map(Number);
-        const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-        aggData.push([xi, yi, +avg.toFixed(3)]);
-      });
-      const sMax = Math.max(...aggData.map((d) => d[2]), 0.1);
+
+      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep + xStep / 2).toFixed(2));
+      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep + yStep / 2).toFixed(2));
+      const surfData: number[][] = [];
+      for (let yi = 0; yi < gridSize; yi++) {
+        for (let xi = 0; xi < gridSize; xi++) {
+          if (gridCount[yi][xi] > 0) {
+            surfData.push([xi, yi, +(gridSum[yi][xi] / gridCount[yi][xi]).toFixed(3)]);
+          }
+        }
+      }
+
       return {
         ...base,
-        title: { text: title + ' (2D 热力图近似，3D 需 echarts-gl)', left: 'center', textStyle: { fontSize: 12 } },
-        xAxis: { type: 'category', data: xLabels, position: 'bottom', axisLabel: { rotate: 45, fontSize: 9 } },
-        yAxis: { type: 'category', data: yLabels, inverse: true },
-        visualMap: { min: Math.min(...aggData.map((d) => d[2])), max: sMax, calculable: true, orient: 'vertical', right: 10,
-          inRange: { color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] } },
-        series: [{ type: 'heatmap', data: aggData, label: { show: true, fontSize: 9 },
-          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } } }],
+        backgroundColor: '#1a1a2e',
+        title: { text: title, left: 'center', textStyle: { color: '#eee' } },
+        tooltip: {},
+        xAxis3D: { type: 'value', name: sx, min: 0, max: gridSize - 1 },
+        yAxis3D: { type: 'value', name: sy, min: 0, max: gridSize - 1 },
+        zAxis3D: { type: 'value', name: 'Z' },
+        grid3D: {
+          viewControl: { autoRotate: true, autoRotateSpeed: 6 },
+          boxWidth: 100, boxHeight: 100, boxDepth: 60,
+        },
+        series: [{
+          type: 'surface',
+          data: surfData,
+          shading: 'color',
+          itemStyle: { color: '#3b82f6', opacity: 0.8 },
+          wireframe: { show: false },
+        }],
       };
     }
     default: return { ...base, xAxis: { type: 'category', data: xData }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: yVals }] };

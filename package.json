@@ -16,6 +16,7 @@
     "dexie": "^3.2.7",
     "echarts": "^5.5.1",
     "echarts-for-react": "^3.0.2",
+    "echarts-gl": "^2.1.0",
     "jstat": "^1.9.6",
     "ml-pca": "^4.1.1",
     "ml-regression": "^6.0.0",
