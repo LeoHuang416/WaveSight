@@ -66,6 +66,7 @@ export default function AnalysisPage() {
   const run = useCallback(async () => {
     if (!currentDataset || !analysisType) return;
     setRunning(true);
+    setResults(null); // clear stale results before computing new ones
     const rows = currentDataset.rows;
     try {
       let result: { tables: ResultTable[]; conclusion: string; chartData?: ChartDataSource[] } = { tables: [], conclusion: '' };
