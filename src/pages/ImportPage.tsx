@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Steps, Button, Upload, Radio, InputNumber, Switch, Table, Tag, message, Space, Typography, Descriptions } from 'antd';
+import { Steps, Button, Upload, Radio, InputNumber, Switch, Table, Tag, message, Space, Typography, Descriptions, Progress, Alert } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { parseFile, loadFullFile } from '@/utils/fileParser';
+import { parseFile, loadFullFile, validateFileSize, type ImportProgress } from '@/utils/fileParser';
 import { useDataOperations } from '@/hooks/useDataOperations';
 import type { ImportPreview, ColumnType, ColumnMeta } from '@/types/data';
 
@@ -21,10 +21,16 @@ export default function ImportPage() {
   const [skipRows, setSkipRows] = useState(0);
   const [delimiter, setDelimiter] = useState(',');
   const [columnTypes, setColumnTypes] = useState<{ name: string; type: ColumnType }[]>([]);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+  const [sizeWarning, setSizeWarning] = useState<string | null>(null);
 
   const handleFile = useCallback(async (f: File) => {
-    setFile(f); setLoading(true);
+    setFile(f); setLoading(true); setSizeWarning(null);
     try {
+      const sizeResult = validateFileSize(f);
+      if (!sizeResult.valid) { message.error(sizeResult.message); setLoading(false); return; }
+      if (sizeResult.message) setSizeWarning(sizeResult.message);
+
       const p = await parseFile(f); setPreview(p);
       if (p.delimiter === '\t') setDelimiter('tsv');
       else if (p.delimiter === ';') setDelimiter('semicolon');
@@ -35,10 +41,10 @@ export default function ImportPage() {
   }, []);
 
   const handleConfirm = useCallback(async () => {
-    if (!file) return; setLoading(true);
+    if (!file) return; setLoading(true); setImportProgress(null);
     try {
       const delimMap: Record<string, string> = { ',': ',', 'tsv': '\t', 'semicolon': ';' };
-      const result = await loadFullFile(file, { hasHeader, skipRows, delimiter: delimMap[delimiter] ?? ',' });
+      const result = await loadFullFile(file, { hasHeader, skipRows, delimiter: delimMap[delimiter] ?? ',' }, setImportProgress);
       const columns: ColumnMeta[] = result.columns.map((c, i) => {
         const userType = columnTypes.find((ct) => ct.name === c.name);
         return { name: c.name, type: userType?.type ?? c.type, index: i };
@@ -47,7 +53,7 @@ export default function ImportPage() {
       message.success(`成功导入 ${result.rows.length} 行数据`);
       navigate('/');
     } catch (err) { message.error(`导入失败: ${err}`); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setImportProgress(null); }
   }, [file, hasHeader, skipRows, delimiter, columnTypes, importDataset, navigate]);
 
   const toggleColumnType = (colName: string) => {
@@ -78,6 +84,18 @@ export default function ImportPage() {
       <Steps current={step} items={[
         { title: '选择文件' }, { title: '预览与清洗' }, { title: '确认导入' },
       ]} style={{ marginBottom: 24 }} />
+
+      {sizeWarning && <Alert type="warning" message={sizeWarning} showIcon style={{ marginBottom: 16 }} closable onClose={() => setSizeWarning(null)} />}
+
+      {importProgress && (
+        <div style={{ marginBottom: 16 }}>
+          <Progress percent={importProgress.total > 0 ? Math.round((importProgress.loaded / importProgress.total) * 100) : 0}
+            status="active" format={() => {
+              const labels = { reading: '读取中...', parsing: '解析中...', saving: '保存中...' };
+              return labels[importProgress.phase];
+            }} />
+        </div>
+      )}
       {step === 0 && (
         <Dragger accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm,.json" showUploadList={false}
           beforeUpload={(f) => { handleFile(f as File); return false; }} disabled={loading}>

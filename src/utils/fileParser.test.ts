@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseFile } from './fileParser';
+import { parseFile, loadFullFile, validateFileSize } from './fileParser';
 
 function makeCSVFile(content: string, name = 'test.csv'): File {
   return new File([content], name, { type: 'text/csv' });
@@ -41,5 +41,68 @@ describe('parseFile', () => {
     const preview = await parseFile(file);
     expect(preview.columns).toHaveLength(2);
     expect(preview.totalRows).toBe(2);
+  });
+
+  it('loads full CSV file', async () => {
+    const file = makeCSVFile('a,b,c\n1,2,3\n4,5,6\n7,8,9');
+    const result = await loadFullFile(file, { hasHeader: true, skipRows: 0, delimiter: ',' });
+    expect(result.headers).toEqual(['a', 'b', 'c']);
+    expect(result.rows).toHaveLength(3);
+    expect(result.columns).toHaveLength(3);
+  });
+
+  it('loadFullFile without header generates column names', async () => {
+    const file = makeCSVFile('1,2,3\n4,5,6');
+    const result = await loadFullFile(file, { hasHeader: false, skipRows: 0, delimiter: ',' });
+    expect(result.headers).toHaveLength(3);
+    expect(result.headers[0]).toMatch(/列\d+/);
+    expect(result.rows).toHaveLength(2);
+  });
+
+  it('loadFullFile supports skipRows', async () => {
+    const file = makeCSVFile('a,b\nskip1,skip2\n1,2\n3,4');
+    const result = await loadFullFile(file, { hasHeader: true, skipRows: 1, delimiter: ',' });
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0].a).toBe('1');
+  });
+
+  it('loadFullFile reports progress', async () => {
+    const file = makeCSVFile('x,y\n1,2\n3,4\n5,6');
+    const progressSteps: string[] = [];
+    await loadFullFile(file, { hasHeader: true, skipRows: 0, delimiter: ',' }, (p) => {
+      progressSteps.push(p.phase);
+    });
+    expect(progressSteps.length).toBeGreaterThan(0);
+    expect(progressSteps).toContain('reading');
+    expect(progressSteps).toContain('saving');
+  });
+
+  it('loadFullFile with TSV delimiter', async () => {
+    const file = makeCSVFile('a\tb\n1\t2\n3\t4', 'test.tsv');
+    const result = await loadFullFile(file, { hasHeader: true, skipRows: 0, delimiter: '\t' });
+    expect(result.headers).toEqual(['a', 'b']);
+    expect(result.rows).toHaveLength(2);
+  });
+});
+
+describe('validateFileSize', () => {
+  it('accepts small files', () => {
+    const file = new File(['small'], 'small.csv', { type: 'text/csv' });
+    expect(validateFileSize(file).valid).toBe(true);
+  });
+
+  it('warns for large files', () => {
+    // Create a large mock by using a big enough size
+    const file = new File(['x'.repeat(100)], 'large.csv');
+    Object.defineProperty(file, 'size', { value: 60 * 1024 * 1024 });
+    const result = validateFileSize(file);
+    expect(result.valid).toBe(true);
+    expect(result.message).toBeDefined();
+  });
+
+  it('rejects files over 100MB', () => {
+    const file = new File(['x'.repeat(100)], 'huge.csv');
+    Object.defineProperty(file, 'size', { value: 120 * 1024 * 1024 });
+    expect(validateFileSize(file).valid).toBe(false);
   });
 });
