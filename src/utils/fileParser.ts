@@ -99,8 +99,10 @@ function isIrrelevant(values: unknown[]): boolean {
 function detectExperimentGroup(headers: string[], rows: Record<string, unknown>[]): string | undefined {
   for (const h of headers) {
     const n = norm(h);
-    // Explicit experiment/batch names
-    if (n.includes('experiment') || n.includes('exp') || n.includes('batch') || n.includes('run')) {
+    // Group / batch / experiment identifiers
+    if (n.includes('experiment') || n.includes('exp') || n.includes('batch') || n.includes('run')
+      || n === 'group' || n.includes('group') || n.includes('组') || n.includes('处理')
+      || n.includes('treatment') || n.includes('condition')) {
       const values = rows.map((r) => String(r[h] ?? ''));
       const unique = new Set(values);
       // Must have 2-20 groups

@@ -24,7 +24,16 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
   const colors = colorScheme === 'grayscale' ? GRAY : undefined;
   const base: Record<string, unknown> = { title: { text: title, left: 'center' }, color: colors, backgroundColor: '#fff' };
   if (!dataset) return base;
-  const nums = dataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown' && c.name !== dataset.experimentGroupCol).map((c) => c.name);
+  const nums = dataset.columns.filter((c) => {
+    if (c.type !== 'numeric') return false;
+    if (c.role === 'metadata' || c.role === 'unknown') return false;
+    if (c.name === dataset.experimentGroupCol) return false;
+    // Exclude group-like columns: few unique numeric values → categorical, not a continuous axis
+    const vals = dataset.rows.map((r) => Number(r[c.name])).filter((v) => !isNaN(v));
+    const uniqueCount = new Set(vals).size;
+    if (uniqueCount <= 10 && uniqueCount < vals.length * 0.5) return false;
+    return true;
+  }).map((c) => c.name);
   if (nums.length === 0) return base;
   const xCol = nums[0], yCol = nums[1] ?? nums[0];
   const xData = dataset.rows.map((r) => r[xCol]).slice(0, 30);
