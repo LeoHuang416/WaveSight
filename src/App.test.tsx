@@ -75,6 +75,14 @@ describe('ChartsPage', () => {
     render(<Wrapper><ChartsPage /></Wrapper>);
     expect(screen.getByText('新建图表')).toBeDefined();
   });
+  it('renders empty state when no charts', () => {
+    render(<Wrapper><ChartsPage /></Wrapper>);
+    expect(screen.getByText('暂无图表，分析数据后保存图表或点击"新建图表"')).toBeDefined();
+  });
+  it('shows chart type filter', () => {
+    render(<Wrapper><ChartsPage /></Wrapper>);
+    expect(screen.getByText('实验图表')).toBeDefined();
+  });
 });
 
 describe('HistoryPage', () => {

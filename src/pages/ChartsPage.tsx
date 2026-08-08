@@ -32,7 +32,34 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
   switch (chartType) {
     case 'bar': return { ...base, xAxis: { type: 'category', data: xData }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: yVals }] };
     case 'line': return { ...base, xAxis: { type: 'category', data: xData }, yAxis: { type: 'value' }, series: [{ type: 'line', data: yVals }] };
+    case 'area': return { ...base, xAxis: { type: 'category', data: xData }, yAxis: { type: 'value' }, series: [{ type: 'line', areaStyle: {}, data: yVals }] };
     case 'scatter': return { ...base, xAxis: { type: 'value' }, yAxis: { type: 'value' }, series: [{ type: 'scatter', data: scatterData }] };
+    case 'histogram': {
+      const histVals = dataset.rows.map((r) => Number(r[xCol])).filter((v) => !isNaN(v));
+      if (histVals.length === 0) return { ...base, xAxis: {}, yAxis: {}, series: [{ type: 'bar', data: [] }] };
+      const binCount = Math.min(20, Math.ceil(Math.sqrt(histVals.length)));
+      const min = Math.min(...histVals), max = Math.max(...histVals);
+      const binWidth = (max - min) / binCount || 1;
+      const bins = Array(binCount).fill(0);
+      histVals.forEach((v) => { const idx = Math.min(Math.floor((v - min) / binWidth), binCount - 1); bins[idx]++; });
+      const binLabels = bins.map((_, i) => `${(min + i * binWidth).toFixed(1)}`);
+      return { ...base, xAxis: { type: 'category', data: binLabels }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: bins, barCategoryGap: '5%' }] };
+    }
+    case 'boxplot': {
+      const boxData = nums.slice(0, 5).map((col) => {
+        const vals = dataset.rows.map((r) => Number(r[col])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
+        if (vals.length < 4) return [0, 0, 0, 0, 0];
+        const q1 = vals[Math.floor(vals.length * 0.25)];
+        const q2 = vals[Math.floor(vals.length * 0.5)];
+        const q3 = vals[Math.floor(vals.length * 0.75)];
+        const iqr = q3 - q1;
+        const lower = Math.max(vals[0], q1 - 1.5 * iqr);
+        const upper = Math.min(vals[vals.length - 1], q3 + 1.5 * iqr);
+        return [lower, q1, q2, q3, upper];
+      });
+      return { ...base, xAxis: { type: 'category', data: nums.slice(0, 5) }, yAxis: { type: 'value' },
+        series: [{ type: 'boxplot', data: boxData, itemStyle: { borderColor: colors?.[0] ?? '#1a1a1a' } }] };
+    }
     default: return { ...base, xAxis: { type: 'category', data: xData }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: yVals }] };
   }
 }
