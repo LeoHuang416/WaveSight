@@ -10,7 +10,7 @@ export default function AppLayout() {
     <Layout style={{ minHeight: '100vh' }}>
       <TopBar />
       <Layout>
-        <Sider width={80} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}><Sidebar /></Sider>
+        <Sider width={120} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}><Sidebar /></Sider>
         <Content style={{ background: '#fafafa', overflow: 'auto' }}><Outlet /></Content>
       </Layout>
       <Footer />
