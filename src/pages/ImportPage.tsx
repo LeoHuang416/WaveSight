@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Steps, Button, Upload, Radio, InputNumber, Switch, Table, Tag, message, Space, Typography, Descriptions, Progress, Alert } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { Steps, Button, Upload, Radio, InputNumber, Switch, Table, Tag, message, Space, Typography, Descriptions, Progress, Alert, Input, Popconfirm } from 'antd';
+import { InboxOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { parseFile, loadFullFile, validateFileSize, type ImportProgress } from '@/utils/fileParser';
 import { useDataOperations } from '@/hooks/useDataOperations';
@@ -24,6 +24,12 @@ export default function ImportPage() {
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [sizeWarning, setSizeWarning] = useState<string | null>(null);
 
+  // Inline editing state
+  const [editableRows, setEditableRows] = useState<Record<string, unknown>[]>([]);
+  const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
+
   const handleFile = useCallback(async (f: File) => {
     setFile(f); setLoading(true); setSizeWarning(null);
     try {
@@ -35,6 +41,8 @@ export default function ImportPage() {
       if (p.delimiter === '\t') setDelimiter('tsv');
       else if (p.delimiter === ';') setDelimiter('semicolon');
       setColumnTypes(p.columns.map((c) => ({ name: c.name, type: c.type, role: c.role ?? 'unknown' })));
+      setEditableRows(p.rows.map((r) => ({ ...r })));
+      setDeletedRows(new Set());
       setStep(1);
     } catch (err) { message.error(`文件解析失败: ${err}`); }
     finally { setLoading(false); }
@@ -45,20 +53,69 @@ export default function ImportPage() {
     try {
       const delimMap: Record<string, string> = { ',': ',', 'tsv': '\t', 'semicolon': ';' };
       const result = await loadFullFile(file, { hasHeader, skipRows, delimiter: delimMap[delimiter] ?? ',' }, setImportProgress);
+
+      // Apply preview edits to loaded rows (patch first N rows)
+      const editedFullRows = result.rows.map((row, idx) => {
+        if (idx < editableRows.length) {
+          const edited = editableRows[idx];
+          // Merge: keep original values for keys not in preview, override with edited
+          return { ...row, ...edited };
+        }
+        return row;
+      });
+
+      // Remove deleted rows
+      const deletedIndices = new Set(deletedRows);
+      const finalRows = editedFullRows.filter((_, idx) => !deletedIndices.has(idx));
+
       const columns: ColumnMeta[] = result.columns.map((c, i) => {
         const userOverride = columnTypes.find((ct) => ct.name === c.name);
         return { name: c.name, type: userOverride?.type ?? c.type, role: userOverride?.role ?? c.role ?? 'unknown', index: i };
       });
-      await importDataset({ name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name, columns, rows: result.rows, experimentGroupCol: result.experimentGroupCol });
-      message.success(`成功导入 ${result.rows.length} 行数据`);
+      await importDataset({ name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name, columns, rows: finalRows, experimentGroupCol: result.experimentGroupCol });
+      message.success(`成功导入 ${finalRows.length} 行数据`);
       navigate('/');
     } catch (err) { message.error(`导入失败: ${err}`); }
     finally { setLoading(false); setImportProgress(null); }
-  }, [file, hasHeader, skipRows, delimiter, columnTypes, importDataset, navigate]);
+  }, [file, hasHeader, skipRows, delimiter, columnTypes, editableRows, deletedRows, importDataset, navigate]);
 
   const toggleColumnType = (colName: string) => {
     setColumnTypes((prev) => prev.map((c) =>
       c.name === colName ? { ...c, type: c.type === 'numeric' ? 'categorical' : 'numeric' } : c));
+  };
+
+  const toggleColumnRole = (colName: string) => {
+    const order: ColumnRole[] = ['independent', 'dependent', 'metadata', 'unknown'];
+    setColumnTypes((prev) => prev.map((c) =>
+      c.name === colName ? { ...c, role: order[(order.indexOf(c.role) + 1) % order.length] } : c));
+  };
+
+  const startEdit = (rowIdx: number, colName: string, currentVal: unknown) => {
+    setEditingCell({ row: rowIdx, col: colName });
+    setEditValue(currentVal === null || currentVal === undefined || currentVal === '' ? '' : String(currentVal));
+  };
+
+  const commitEdit = () => {
+    if (!editingCell) return;
+    const { row, col } = editingCell;
+    setEditableRows((prev) => {
+      const next = [...prev];
+      next[row] = { ...next[row], [col]: editValue === '' ? null : editValue };
+      return next;
+    });
+    setEditingCell(null);
+  };
+
+  const deleteRow = (rowIdx: number) => {
+    setDeletedRows((prev) => new Set(prev).add(rowIdx));
+  };
+
+  const undoDeleteRow = (rowIdx: number) => {
+    setDeletedRows((prev) => {
+      const next = new Set(prev);
+      next.delete(rowIdx);
+      return next;
+    });
   };
 
   const ROLE_LABELS: Record<ColumnRole, { label: string; color: string }> = {
@@ -68,27 +125,92 @@ export default function ImportPage() {
     unknown: { label: '未知', color: 'orange' },
   };
 
-  const previewColumns: ColumnsType<Record<string, unknown>> = preview?.columns.map((col, i) => {
-    const ct = columnTypes[i];
-    const role = ROLE_LABELS[ct?.role ?? col.role ?? 'unknown'];
-    return {
-      title: (
-        <span onClick={() => toggleColumnType(col.name)} style={{ cursor: 'pointer', userSelect: 'none' }}>
-          {col.name}
-          <Tag color={ct?.type === 'numeric' ? 'blue' : 'orange'} style={{ marginLeft: 4, fontSize: 10 }}>
-            {ct?.type === 'numeric' ? '#' : 'Aa'}
-          </Tag>
-          <Tag color={role.color} style={{ marginLeft: 2, fontSize: 10 }}>{role.label}</Tag>
-        </span>
-      ),
-      dataIndex: col.name, key: col.name, ellipsis: true,
-      render: (val: unknown) => {
-        if (val === null || val === undefined || val === '')
-          return <span style={{ color: '#c47878', background: '#fff1f0', padding: '0 6px', borderRadius: 4 }}>—</span>;
-        return String(val);
+  const previewColumns: ColumnsType<Record<string, unknown>> = useMemo(() => {
+    if (!preview) return [];
+    return [
+      ...preview.columns.map((col, i) => {
+        const ct = columnTypes[i];
+        const role = ROLE_LABELS[ct?.role ?? col.role ?? 'unknown'];
+        return {
+          title: (
+            <span style={{ cursor: 'pointer', userSelect: 'none', fontSize: 12 }}>
+              <span onClick={() => toggleColumnType(col.name)}>{col.name}</span>
+              <Tag color={ct?.type === 'numeric' ? 'blue' : 'orange'} style={{ marginLeft: 4, fontSize: 10, cursor: 'pointer' }}
+                onClick={() => toggleColumnType(col.name)}>
+                {ct?.type === 'numeric' ? '#' : 'Aa'}
+              </Tag>
+              <Tag color={role.color} style={{ marginLeft: 2, fontSize: 10, cursor: 'pointer' }}
+                onClick={() => toggleColumnRole(col.name)}>
+                {role.label}
+              </Tag>
+            </span>
+          ),
+          dataIndex: col.name, key: col.name, width: 150,
+          render: (val: unknown, _record: Record<string, unknown>, idx: number) => {
+            const isEditing = editingCell?.row === idx && editingCell?.col === col.name;
+            const isDeleted = deletedRows.has(idx);
+            if (isDeleted) {
+              return (
+                <span style={{ color: '#ccc', textDecoration: 'line-through', cursor: 'pointer', fontSize: 13 }}
+                  onClick={() => undoDeleteRow(idx)} title="点击恢复">
+                  {val === null || val === undefined || val === '' ? '—' : String(val)}
+                </span>
+              );
+            }
+            if (isEditing) {
+              return (
+                <Input
+                  size="small"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={commitEdit}
+                  onPressEnter={commitEdit}
+                  autoFocus
+                  style={{ height: 28, fontSize: 13 }}
+                />
+              );
+            }
+            const display = val === null || val === undefined || val === '' ? '—' : String(val);
+            const isMissing = val === null || val === undefined || val === '';
+            return (
+              <span
+                onClick={() => startEdit(idx, col.name, val)}
+                style={{
+                  cursor: 'text',
+                  color: isMissing ? '#c47878' : undefined,
+                  background: isMissing ? '#fff1f0' : undefined,
+                  padding: '1px 6px',
+                  borderRadius: 3,
+                  fontSize: 13,
+                  display: 'inline-block',
+                  minWidth: 30,
+                }}
+                title="点击编辑"
+              >
+                {display}
+              </span>
+            );
+          },
+        };
+      }),
+      // Action column: delete row
+      {
+        title: '',
+        key: '_actions',
+        width: 40,
+        render: (_: unknown, _record: Record<string, unknown>, idx: number) => {
+          if (deletedRows.has(idx)) {
+            return <Button size="small" type="link" onClick={() => undoDeleteRow(idx)} style={{ fontSize: 11 }}>恢复</Button>;
+          }
+          return (
+            <Popconfirm title="删除此行?" onConfirm={() => deleteRow(idx)}>
+              <Button size="small" type="text" danger icon={<DeleteOutlined />} style={{ fontSize: 12 }} />
+            </Popconfirm>
+          );
+        },
       },
-    };
-  }) ?? [];
+    ];
+  }, [preview, columnTypes, editingCell, editValue, deletedRows]);
 
   return (
     <div style={{ padding: '4px 0 24px' }}>
@@ -159,12 +281,14 @@ export default function ImportPage() {
             </Space>
             <Table
               columns={previewColumns}
-              dataSource={preview.rows.map((row, i) => ({ ...row, _key: i }))}
+              dataSource={editableRows.map((row, i) => ({ ...row, _key: i }))}
               rowKey="_key" scroll={{ x: 'max-content', y: 400 }} size="small"
               pagination={false} style={{ marginBottom: 12 }}
             />
             <Text type="secondary">
-              预览前 {preview.rows.length} 行 · 共 {preview.totalRows} 行 · {preview.columns.length} 列
+              预览前 {preview.rows.length} 行
+              {deletedRows.size > 0 && <span style={{ color: '#c47878' }}>（已标记删除 {deletedRows.size} 行）</span>}
+              {' · '}共 {preview.totalRows} 行 · {preview.columns.length} 列
             </Text>
             <div style={{ marginTop: 16 }}>
               <Space>
