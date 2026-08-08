@@ -1,5 +1,5 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import AppLayout from '@/components/layout/AppLayout';
 import HomePage from '@/pages/HomePage';
@@ -10,6 +10,7 @@ import ChartsPage from '@/pages/ChartsPage';
 import HistoryPage from '@/pages/HistoryPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { useTheme, useAntTheme } from '@/themes/useTheme';
+import { useSettingsStore } from '@/stores/useSettingsStore';
 
 const router = createBrowserRouter([{
   path: '/',
@@ -28,9 +29,16 @@ const router = createBrowserRouter([{
 function ThemeApp() {
   useTheme();
   const antTheme = useAntTheme();
+  const appearanceMode = useSettingsStore((s) => s.appearanceMode);
 
   return (
-    <ConfigProvider locale={zhCN} theme={antTheme}>
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        ...antTheme,
+        algorithm: appearanceMode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
+      }}
+    >
       <RouterProvider router={router} />
     </ConfigProvider>
   );

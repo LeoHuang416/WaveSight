@@ -4,14 +4,21 @@ import { ExportOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { getStorageStats, exportAllData, clearAllData } from '@/db/operations';
 import { exportAllDataJSON } from '@/utils/export';
-import { THEMES } from '@/themes';
+import { THEMES, getTheme } from '@/themes';
+import type { AppearanceMode, RowHeight, FontSize, DataAlign } from '@/stores/useSettingsStore';
 
 const { Title, Text } = Typography;
 
 export default function SettingsPage() {
-  const { uiTheme, alpha, significantDigits, defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
-    setUiTheme, setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays } = useSettingsStore();
+  const {
+    uiTheme, appearanceMode, kimiRowHeight, kimiFontSize, kimiDataAlign,
+    alpha, significantDigits, defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
+    setUiTheme, setAppearanceMode, setKimiRowHeight, setKimiFontSize, setKimiDataAlign,
+    setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays,
+  } = useSettingsStore();
+
   const [stats, setStats] = useState({ datasetCount: 0, chartCount: 0, historyCount: 0 });
+  const isKimi = uiTheme === 'kimi-minimal';
 
   useEffect(() => { getStorageStats().then(setStats); }, []);
 
@@ -43,18 +50,66 @@ export default function SettingsPage() {
       <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>设置</Title>
       <Space direction="vertical" style={{ width: '100%' }} size={16}>
 
-        <Card title="界面主题" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
-          <Select
-            value={uiTheme}
-            onChange={setUiTheme}
-            style={{ width: '100%' }}
-            options={THEMES.map((t) => ({
-              label: `${t.label} — ${t.description}`,
-              value: t.id,
-            }))}
-          />
+        {/* ─── Appearance ─── */}
+        <Card title="外观" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <Space>
+              <Text style={{ width: 80, display: 'inline-block' }}>主题方案</Text>
+              <Select
+                value={uiTheme}
+                onChange={setUiTheme}
+                style={{ width: 280 }}
+                options={THEMES.map((t) => ({
+                  label: `${t.label} — ${t.description}`,
+                  value: t.id,
+                }))}
+              />
+            </Space>
+            <Space>
+              <Text style={{ width: 80, display: 'inline-block' }}>深色模式</Text>
+              <Switch
+                checked={appearanceMode === 'dark'}
+                onChange={(v) => setAppearanceMode(v ? 'dark' : 'light')}
+                checkedChildren="🌙"
+                unCheckedChildren="☀️"
+              />
+            </Space>
+
+            {isKimi && (
+              <>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0', paddingTop: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Kimi Minimal 子选项</Text>
+                </div>
+                <Space>
+                  <Text style={{ width: 80, display: 'inline-block' }}>行高</Text>
+                  <Radio.Group value={kimiRowHeight} onChange={(e) => setKimiRowHeight(e.target.value as RowHeight)}>
+                    <Radio.Button value="compact">紧凑 40px</Radio.Button>
+                    <Radio.Button value="standard">标准 48px</Radio.Button>
+                    <Radio.Button value="relaxed">宽松 56px</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space>
+                  <Text style={{ width: 80, display: 'inline-block' }}>字体大小</Text>
+                  <Radio.Group value={kimiFontSize} onChange={(e) => setKimiFontSize(e.target.value as FontSize)}>
+                    <Radio.Button value="small">小 12px</Radio.Button>
+                    <Radio.Button value="standard">标准 14px</Radio.Button>
+                    <Radio.Button value="large">大 16px</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space>
+                  <Text style={{ width: 80, display: 'inline-block' }}>数据对齐</Text>
+                  <Radio.Group value={kimiDataAlign} onChange={(e) => setKimiDataAlign(e.target.value as DataAlign)}>
+                    <Radio.Button value="auto">自动</Radio.Button>
+                    <Radio.Button value="left">全部左对齐</Radio.Button>
+                    <Radio.Button value="decimal">小数点对齐</Radio.Button>
+                  </Radio.Group>
+                </Space>
+              </>
+            )}
+          </Space>
         </Card>
 
+        {/* ─── Analysis defaults ─── */}
         <Card title="分析默认值" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical">
             <Space><Text>显著性水平 α</Text><InputNumber min={0.001} max={0.1} step={0.01} value={alpha} onChange={(v) => setAlpha(v ?? 0.05)} /></Space>
@@ -62,6 +117,7 @@ export default function SettingsPage() {
           </Space>
         </Card>
 
+        {/* ─── Chart defaults ─── */}
         <Card title="图表默认值" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical">
             <Space><Text>默认配色</Text><Radio.Group value={defaultColorScheme} onChange={(e) => setDefaultColorScheme(e.target.value)}><Radio value="grayscale">学术灰度</Radio><Radio value="color">彩色</Radio></Radio.Group></Space>
@@ -69,6 +125,7 @@ export default function SettingsPage() {
           </Space>
         </Card>
 
+        {/* ─── History ─── */}
         <Card title="历史记录" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical">
             <Space><Text>自动清理</Text><Switch checked={autoCleanHistory} onChange={setAutoCleanHistory} /></Space>
@@ -76,6 +133,7 @@ export default function SettingsPage() {
           </Space>
         </Card>
 
+        {/* ─── Data management ─── */}
         <Card title="数据管理" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space style={{ width: '100%' }} direction="vertical">
             <Space>
@@ -90,6 +148,7 @@ export default function SettingsPage() {
           </Space>
         </Card>
 
+        {/* ─── About ─── */}
         <Card title="关于" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px', background: 'rgba(255,255,255,0.25)' }}>
           <Text>实验数据分析工作台 v1.0</Text><br />
           <Text type="secondary">本地运行，数据仅在当前电脑浏览器存储。无需联网。</Text>

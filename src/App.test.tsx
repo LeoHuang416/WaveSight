@@ -116,11 +116,16 @@ describe('HistoryPage', () => {
 describe('SettingsPage', () => {
   it('renders all setting cards', () => {
     render(<Wrapper><SettingsPage /></Wrapper>);
-    expect(screen.getByText('界面主题')).toBeDefined();
+    expect(screen.getByText('外观')).toBeDefined();
     expect(screen.getByText('分析默认值')).toBeDefined();
     expect(screen.getByText('图表默认值')).toBeDefined();
     expect(screen.getByText('数据管理')).toBeDefined();
     expect(screen.getByText('关于')).toBeDefined();
+  });
+  it('shows theme and dark mode controls', () => {
+    render(<Wrapper><SettingsPage /></Wrapper>);
+    expect(screen.getByText('主题方案')).toBeDefined();
+    expect(screen.getByText('深色模式')).toBeDefined();
   });
   it('shows version info', () => {
     render(<Wrapper><SettingsPage /></Wrapper>);

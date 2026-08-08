@@ -4,19 +4,24 @@ import { Layout } from 'antd';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import Footer from './Footer';
+import { useSettingsStore } from '@/stores/useSettingsStore';
+import { getTheme } from '@/themes';
 
 const { Sider, Content } = Layout;
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
+  const t = getTheme(uiTheme);
 
   return (
     <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
       <TopBar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
       <Layout style={{ background: 'transparent', marginTop: 56 }}>
         <Sider
-          width={240}
-          collapsedWidth={64}
+          id="app-sidebar"
+          width={t.sidebarWidth}
+          collapsedWidth={t.sidebarCollapsedWidth}
           collapsible
           collapsed={collapsed}
           trigger={null}
@@ -34,7 +39,7 @@ export default function AppLayout() {
         </Sider>
         <Content
           style={{
-            marginLeft: collapsed ? 64 : 240,
+            marginLeft: collapsed ? t.sidebarCollapsedWidth : t.sidebarWidth,
             transition: 'margin-left 0.2s ease-in-out',
             background: 'transparent',
             minHeight: 'calc(100vh - 56px - 32px)',

@@ -1,5 +1,5 @@
 /* ============================================================
-   Design Tokens — macOS / Kimi / Edge Hybrid Design System
+   Design Tokens — Base + Theme Variants
    ============================================================ */
 
 :root {
@@ -15,40 +15,41 @@
   --font-size-xl: 24px;
   --font-size-2xl: 28px;
 
-  /* ---- Colors ---- */
+  /* ---- Default Colors (macOS Glass) ---- */
+  --color-accent: #5B7F95;
+  --color-accent-hover: #4A6B7F;
+  --color-accent-light: rgba(91,127,149,0.08);
+  --color-accent-subtle: rgba(91,127,149,0.04);
   --color-text-primary: #333333;
   --color-text-secondary: #888888;
   --color-text-tertiary: #b0b0b0;
-  --color-accent: #5B7F95;
-  --color-accent-hover: #4A6B7F;
-  --color-accent-light: rgba(91, 127, 149, 0.08);
-  --color-accent-subtle: rgba(91, 127, 149, 0.04);
 
-  /* ---- Backgrounds ---- */
+  /* ---- Default Backgrounds ---- */
   --bg-app: linear-gradient(135deg, #F7F9FC 0%, #EFF2F7 100%);
-  --bg-glass: rgba(255, 255, 255, 0.65);
-  --bg-glass-hover: rgba(255, 255, 255, 0.85);
-  --bg-glass-active: rgba(255, 255, 255, 0.95);
-  --bg-card: rgba(255, 255, 255, 0.55);
-  --bg-sidebar: rgba(255, 255, 255, 0.4);
-  --bg-topbar: rgba(255, 255, 255, 0.55);
-  --bg-input: rgba(255, 255, 255, 0.7);
+  --bg-secondary: #FFFFFF;
+  --bg-glass: rgba(255,255,255,0.65);
+  --bg-glass-hover: rgba(255,255,255,0.85);
+  --bg-glass-active: rgba(255,255,255,0.95);
+  --bg-card: rgba(255,255,255,0.55);
+  --bg-sidebar: rgba(255,255,255,0.4);
+  --bg-topbar: rgba(255,255,255,0.55);
+  --bg-input: rgba(255,255,255,0.7);
 
-  /* ---- Glass Effects ---- */
+  /* ---- Default Glass Effects ---- */
   --glass-blur: blur(20px);
   --glass-blur-light: blur(10px);
 
-  /* ---- Borders ---- */
-  --border-thin: 1px solid rgba(255, 255, 255, 0.8);
-  --border-subtle: 1px solid rgba(0, 0, 0, 0.06);
-  --border-hover: 1px solid rgba(91, 127, 149, 0.2);
+  /* ---- Default Borders ---- */
+  --border-thin: 1px solid rgba(255,255,255,0.8);
+  --border-subtle: 1px solid rgba(0,0,0,0.06);
+  --border-hover: 1px solid rgba(91,127,149,0.2);
 
-  /* ---- Shadows ---- */
-  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.03);
-  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.05);
+  /* ---- Default Shadows ---- */
+  --shadow-card: 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-elevated: 0 8px 24px rgba(0,0,0,0.05);
   --shadow-none: none;
 
-  /* ---- Border Radius ---- */
+  /* ---- Default Border Radius ---- */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -69,10 +70,20 @@
   --topbar-height: 56px;
   --content-max-width: 1000px;
 
+  /* ---- Table ---- */
+  --table-row-height: 48px;
+  --table-font-size: 14px;
+  --table-text-align: inherit;
+
+  /* ---- Fonts ---- */
+  --font-mono: "SF Mono", "JetBrains Mono", "Consolas", monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
   /* ---- Transitions ---- */
-  --transition-fast: all 0.15s ease-in-out;
+  --transition-fast: all 0.1s ease-in-out;
   --transition-normal: all 0.2s ease-in-out;
   --transition-slow: all 0.3s ease-in-out;
+  --transition-page: opacity 0.15s ease-in-out;
 
   /* ---- Z-index ---- */
   --z-sidebar: 100;
@@ -81,14 +92,12 @@
 }
 
 /* ---- Global Resets ---- */
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: var(--font-family);
+  font-family: var(--font-sans);
   font-weight: var(--font-weight-body);
   font-size: var(--font-size-base);
   color: var(--color-text-primary);
@@ -97,7 +106,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ---- Utility Classes ---- */
+/* ============================================================
+   Utility Classes — macOS Glass (default)
+   ============================================================ */
 .glass-card {
   background: var(--bg-glass);
   backdrop-filter: var(--glass-blur);
@@ -107,7 +118,6 @@ body {
   box-shadow: var(--shadow-card);
   transition: var(--transition-normal);
 }
-
 .glass-card:hover {
   background: var(--bg-glass-hover);
   box-shadow: var(--shadow-elevated);
@@ -129,172 +139,356 @@ body {
   padding: var(--space-lg);
 }
 
-/* ---- Scrollbar ---- */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* ============================================================
+   Kimi Minimal Overrides
+   ============================================================ */
+[data-theme="kimi-minimal"] body {
+  background: var(--bg-app);
 }
 
-::-webkit-scrollbar-track {
+[data-theme="kimi-minimal"] .glass-card,
+[data-theme="kimi-minimal"] .glass-panel {
   background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: var(--radius-full);
+[data-theme="kimi-minimal"] .glass-card:hover,
+[data-theme="kimi-minimal"] .glass-panel:hover {
+  background: transparent;
+  box-shadow: none;
+  border: none;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+/* Kimi Minimal — section dividers via bottom border */
+[data-theme="kimi-minimal"] .glass-card {
+  border-bottom: 1px solid var(--border-thin);
+  padding-bottom: var(--space-lg);
+  margin-bottom: var(--space-lg);
 }
 
-/* ---- Ant Design Overrides ---- */
+/* ============================================================
+   Scrollbar
+   ============================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+[data-theme="kimi-minimal"] ::-webkit-scrollbar { width: 4px; height: 4px; }
+[data-theme="kimi-minimal"] ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+[data-theme="kimi-minimal"] ::-webkit-scrollbar-thumb:hover { background: #bbb; }
+[data-theme="kimi-minimal"][data-mode="dark"] ::-webkit-scrollbar-thumb { background: #333; }
+[data-theme="kimi-minimal"][data-mode="dark"] ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* ============================================================
+   Ant Design Overrides — Shared
+   ============================================================ */
 .ant-btn {
-  border-radius: var(--radius-md) !important;
-  transition: var(--transition-normal) !important;
+  transition: var(--transition-fast) !important;
   font-weight: var(--font-weight-body) !important;
-  box-shadow: none !important;
+}
+.ant-btn-primary { box-shadow: none !important; }
+
+.ant-input, .ant-input-number, .ant-select-selector, .ant-picker {
+  transition: var(--transition-fast) !important;
 }
 
+.ant-table {
+  font-size: var(--table-font-size) !important;
+}
+
+.ant-table-thead > tr > th {
+  font-weight: 500 !important;
+  color: var(--color-text-secondary) !important;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ant-tag { font-size: var(--font-size-xs) !important; }
+.ant-statistic-title { font-size: var(--font-size-xs) !important; color: var(--color-text-secondary) !important; font-weight: var(--font-weight-body) !important; }
+.ant-statistic-content { font-weight: var(--font-weight-heading) !important; color: var(--color-text-primary) !important; }
+.ant-tabs-nav { margin-bottom: var(--space-md) !important; }
+.ant-steps-item-title { font-size: var(--font-size-sm) !important; }
+.ant-menu { background: transparent !important; border: none !important; }
+.ant-menu-item { transition: var(--transition-fast) !important; }
+.ant-empty-description { color: var(--color-text-secondary) !important; }
+.ant-alert { border-radius: var(--radius-md) !important; }
+.ant-select-dropdown, .ant-picker-dropdown { border-radius: var(--radius-md) !important; box-shadow: var(--shadow-elevated) !important; }
+.ant-message-notice-content { border-radius: var(--radius-md) !important; box-shadow: var(--shadow-elevated) !important; }
+
+/* ============================================================
+   Ant Design Overrides — macOS Glass (default)
+   ============================================================ */
+
+/* Buttons */
 .ant-btn-primary {
   background: var(--color-accent) !important;
   border-color: var(--color-accent) !important;
 }
-
 .ant-btn-primary:hover {
   background: var(--color-accent-hover) !important;
   border-color: var(--color-accent-hover) !important;
 }
-
 .ant-btn-default {
-  border: 1px solid rgba(0, 0, 0, 0.1) !important;
-  background: rgba(255, 255, 255, 0.5) !important;
+  border: 1px solid rgba(0,0,0,0.1) !important;
+  background: rgba(255,255,255,0.5) !important;
+  border-radius: var(--radius-md) !important;
 }
-
 .ant-btn-default:hover {
-  background: rgba(255, 255, 255, 0.8) !important;
+  background: rgba(255,255,255,0.8) !important;
   border-color: var(--color-accent) !important;
   color: var(--color-accent) !important;
 }
 
+/* Cards */
 .ant-card {
   border-radius: var(--radius-lg) !important;
   border: var(--border-thin) !important;
   box-shadow: var(--shadow-card) !important;
 }
+.ant-card-bordered { border: var(--border-thin) !important; }
 
-.ant-card-bordered {
-  border: var(--border-thin) !important;
-}
-
+/* Inputs */
 .ant-input, .ant-input-number, .ant-select-selector, .ant-picker {
   border-radius: var(--radius-md) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
   background: var(--bg-input) !important;
-  transition: var(--transition-normal) !important;
 }
-
-.ant-input:hover, .ant-input-number:hover, .ant-select-selector:hover {
-  border-color: var(--color-accent) !important;
-}
-
+.ant-input:hover, .ant-input-number:hover, .ant-select-selector:hover { border-color: var(--color-accent) !important; }
 .ant-input:focus, .ant-input-number:focus, .ant-select-selector:focus {
   border-color: var(--color-accent) !important;
-  box-shadow: 0 0 0 2px rgba(91, 127, 149, 0.1) !important;
+  box-shadow: 0 0 0 2px rgba(91,127,149,0.1) !important;
 }
 
-.ant-table {
-  border-radius: var(--radius-md) !important;
-  font-size: var(--font-size-sm) !important;
-}
+/* Table */
+.ant-table-thead > tr > th { background: rgba(0,0,0,0.02) !important; }
+.ant-table { border-radius: var(--radius-md) !important; }
 
-.ant-table-thead > tr > th {
-  background: rgba(0, 0, 0, 0.02) !important;
-  font-weight: var(--font-weight-heading) !important;
-  color: var(--color-text-secondary) !important;
-  font-size: var(--font-size-xs) !important;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+/* Menu */
+.ant-menu-item { border-radius: var(--radius-md) !important; margin: 2px 8px !important; width: auto !important; }
+.ant-menu-item:hover { background: rgba(0,0,0,0.04) !important; }
+.ant-menu-item-selected { background: var(--color-accent-light) !important; color: var(--color-accent) !important; }
 
-.ant-tag {
-  border-radius: var(--radius-sm) !important;
-  font-size: var(--font-size-xs) !important;
-}
-
-.ant-statistic-title {
-  font-size: var(--font-size-xs) !important;
-  color: var(--color-text-secondary) !important;
-  font-weight: var(--font-weight-body) !important;
-}
-
-.ant-statistic-content {
-  font-weight: var(--font-weight-heading) !important;
-  color: var(--color-text-primary) !important;
-}
-
-.ant-tabs-nav {
-  margin-bottom: var(--space-md) !important;
-}
-
-.ant-steps-item-title {
-  font-size: var(--font-size-sm) !important;
-}
-
-.ant-menu {
-  background: transparent !important;
-  border: none !important;
-}
-
-.ant-menu-item {
-  border-radius: var(--radius-md) !important;
-  margin: 2px 8px !important;
-  width: auto !important;
-  transition: var(--transition-normal) !important;
-}
-
-.ant-menu-item:hover {
-  background: rgba(0, 0, 0, 0.04) !important;
-}
-
-.ant-menu-item-selected {
-  background: var(--color-accent-light) !important;
-  color: var(--color-accent) !important;
-}
-
-.ant-typography {
-  color: var(--color-text-primary) !important;
-}
-
-.ant-empty-description {
-  color: var(--color-text-secondary) !important;
-}
-
-.ant-alert {
-  border-radius: var(--radius-md) !important;
-  border: var(--border-subtle) !important;
-}
-
+/* Upload */
 .ant-upload-drag {
   border-radius: var(--radius-lg) !important;
   background: var(--bg-glass) !important;
   backdrop-filter: var(--glass-blur) !important;
-  border: 2px dashed rgba(0, 0, 0, 0.08) !important;
+  border: 2px dashed rgba(0,0,0,0.08) !important;
   transition: var(--transition-normal) !important;
 }
+.ant-upload-drag:hover { border-color: var(--color-accent) !important; background: var(--bg-glass-hover) !important; }
 
-.ant-upload-drag:hover {
+.ant-alert { border: var(--border-subtle) !important; }
+
+/* ============================================================
+   Ant Design Overrides — Kimi Minimal
+   ============================================================ */
+
+/* Buttons — accent fill + 8px radius, text-only secondary */
+[data-theme="kimi-minimal"] .ant-btn {
+  border-radius: var(--radius-md) !important;
+  font-weight: 500 !important;
+}
+[data-theme="kimi-minimal"] .ant-btn-primary {
+  background: var(--color-accent) !important;
   border-color: var(--color-accent) !important;
-  background: var(--bg-glass-hover) !important;
+  box-shadow: none !important;
+}
+[data-theme="kimi-minimal"] .ant-btn-primary:hover {
+  background: var(--color-accent-hover) !important;
+  border-color: var(--color-accent-hover) !important;
+}
+[data-theme="kimi-minimal"] .ant-btn-default {
+  background: transparent !important;
+  border: 1px solid var(--border-thin) !important;
+  color: var(--color-text-primary) !important;
+  box-shadow: none !important;
+}
+[data-theme="kimi-minimal"] .ant-btn-default:hover {
+  background: var(--bg-secondary) !important;
+  border-color: var(--color-accent) !important;
+  color: var(--color-accent) !important;
+}
+[data-theme="kimi-minimal"] .ant-btn-text {
+  color: var(--color-text-secondary) !important;
+}
+[data-theme="kimi-minimal"] .ant-btn-text:hover {
+  color: var(--color-accent) !important;
+  background: var(--color-accent-light) !important;
 }
 
-.ant-select-dropdown, .ant-picker-dropdown {
-  border-radius: var(--radius-md) !important;
-  box-shadow: var(--shadow-elevated) !important;
-  border: var(--border-thin) !important;
+/* Cards — no shadow, no radius, no card wrapper */
+[data-theme="kimi-minimal"] .ant-card {
+  border-radius: 0 !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border-thin) !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+[data-theme="kimi-minimal"] .ant-card-bordered {
+  border: none !important;
+  border-bottom: 1px solid var(--border-thin) !important;
 }
 
-.ant-message-notice-content {
-  border-radius: var(--radius-md) !important;
-  box-shadow: var(--shadow-elevated) !important;
+/* Inputs — flat */
+[data-theme="kimi-minimal"] .ant-input,
+[data-theme="kimi-minimal"] .ant-input-number,
+[data-theme="kimi-minimal"] .ant-select-selector,
+[data-theme="kimi-minimal"] .ant-picker {
+  border-radius: var(--radius-sm) !important;
+  border: 1px solid var(--border-thin) !important;
+  background: var(--bg-app) !important;
+  box-shadow: none !important;
+}
+[data-theme="kimi-minimal"] .ant-input:hover,
+[data-theme="kimi-minimal"] .ant-input-number:hover,
+[data-theme="kimi-minimal"] .ant-select-selector:hover {
+  border-color: var(--color-accent) !important;
+}
+[data-theme="kimi-minimal"] .ant-input:focus,
+[data-theme="kimi-minimal"] .ant-input-number:focus,
+[data-theme="kimi-minimal"] .ant-select-selector:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-light) !important;
+}
+
+/* Table — academic data style */
+[data-theme="kimi-minimal"] .ant-table {
+  font-size: var(--table-font-size) !important;
+  font-family: var(--font-mono) !important;
+  border-radius: 0 !important;
+}
+[data-theme="kimi-minimal"] .ant-table-thead > tr > th {
+  background: var(--bg-secondary) !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+  font-family: var(--font-sans) !important;
+  color: var(--color-text-secondary) !important;
+  border-bottom: 1px solid var(--border-thin) !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+[data-theme="kimi-minimal"] .ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--border-light, #f5f5f5) !important;
+  border-left: none !important;
+  border-right: none !important;
+  padding: calc((var(--table-row-height) - var(--table-font-size)) / 2) 16px !important;
+  text-align: var(--table-text-align) !important;
+}
+[data-theme="kimi-minimal"] .ant-table-tbody > tr:hover > td {
+  background: var(--bg-secondary) !important;
+}
+[data-theme="kimi-minimal"] .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: var(--color-accent-light) !important;
+  border-left: 3px solid var(--color-accent) !important;
+}
+
+/* Table row height via CSS */
+[data-theme="kimi-minimal"] .ant-table-cell {
+  line-height: 1.4 !important;
+}
+
+/* Menu — pure icon nav, 4px rounded selected */
+[data-theme="kimi-minimal"] .ant-menu-item {
+  border-radius: 4px !important;
+  margin: 2px 6px !important;
+  width: auto !important;
+}
+[data-theme="kimi-minimal"] .ant-menu-item:hover {
+  background: var(--color-accent-light) !important;
+}
+[data-theme="kimi-minimal"] .ant-menu-item-selected {
+  background: var(--color-accent-light) !important;
+  color: var(--color-accent) !important;
+}
+
+/* Upload — flat */
+[data-theme="kimi-minimal"] .ant-upload-drag {
+  border-radius: var(--radius-sm) !important;
+  background: var(--bg-secondary) !important;
+  backdrop-filter: none !important;
+  border: 2px dashed var(--border-thin) !important;
+}
+[data-theme="kimi-minimal"] .ant-upload-drag:hover {
+  border-color: var(--color-accent) !important;
+  background: var(--bg-app) !important;
+}
+
+/* Alert */
+[data-theme="kimi-minimal"] .ant-alert {
+  border-radius: var(--radius-sm) !important;
+  border: 1px solid var(--border-thin) !important;
+}
+
+/* Tag */
+[data-theme="kimi-minimal"] .ant-tag {
+  border-radius: 4px !important;
+  font-weight: 500 !important;
+}
+
+/* Collapse */
+[data-theme="kimi-minimal"] .ant-collapse {
+  border: none !important;
+  background: transparent !important;
+}
+[data-theme="kimi-minimal"] .ant-collapse-item {
+  border-bottom: 1px solid var(--border-thin) !important;
+}
+[data-theme="kimi-minimal"] .ant-collapse-header {
+  font-weight: 500 !important;
+}
+
+/* Steps */
+[data-theme="kimi-minimal"] .ant-steps-item-finish .ant-steps-item-icon {
+  background: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+}
+
+/* Statistic */
+[data-theme="kimi-minimal"] .ant-statistic-content {
+  font-family: var(--font-mono) !important;
+}
+
+/* ============================================================
+   Page Transitions (all themes)
+   ============================================================ */
+@keyframes pageIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+[data-theme="kimi-minimal"] .ant-layout-content {
+  animation: pageIn 0.15s ease-in-out;
+}
+
+/* ============================================================
+   Dark mode — body background fix
+   ============================================================ */
+[data-mode="dark"] body {
+  background: var(--bg-app);
+  color: var(--color-text-primary);
+}
+
+/* ============================================================
+   TopBar / Sidebar glass removal for Kimi Minimal
+   ============================================================ */
+[data-theme="kimi-minimal"] #app-topbar {
+  background: var(--bg-app) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: 1px solid var(--border-thin) !important;
+}
+[data-theme="kimi-minimal"] #app-sidebar {
+  background: var(--bg-secondary) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-right: 1px solid var(--border-thin) !important;
+}
+[data-theme="kimi-minimal"] #app-footer {
+  border-top: 1px solid var(--border-thin) !important;
 }

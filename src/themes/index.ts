@@ -3,100 +3,132 @@
  * Add new themes here; the settings page auto-populates the selector.
  */
 
+export interface ThemeColors {
+  bg: string;
+  bgSecondary: string;
+  textPrimary: string;
+  textSecondary: string;
+  textTertiary: string;
+  border: string;
+  borderLight: string;
+  accent: string;
+  accentHover: string;
+  accentLight: string;
+}
+
 export interface ThemeDefinition {
   id: string;
   label: string;
   description: string;
+  light: ThemeColors;
+  dark: ThemeColors;
 
-  // Colors
-  colorAccent: string;
-  colorAccentHover: string;
-  colorAccentLight: string;
-  colorAccentSubtle: string;
-  colorTextPrimary: string;
-  colorTextSecondary: string;
-  colorTextTertiary: string;
+  /* Layout */
+  sidebarWidth: number;
+  sidebarCollapsedWidth: number;
+  buttonRadius: number;
 
-  // Backgrounds
-  bgApp: string;
-  bgGlass: string;
-  bgGlassHover: string;
-  bgGlassActive: string;
-  bgCard: string;
-  bgSidebar: string;
-  bgTopbar: string;
-  bgInput: string;
+  /* Feature flags */
+  hasGlass: boolean;
+  hasCardShadow: boolean;
+  hasCardRadius: boolean;
 
-  // Glass
-  glassBlur: string;
-  glassBlurLight: string;
-
-  // Borders
-  borderThin: string;
-  borderSubtle: string;
-  borderHover: string;
-
-  // Shadows
-  shadowCard: string;
-  shadowElevated: string;
-
-  // Radius
-  radiusSm: string;
-  radiusMd: string;
-  radiusLg: string;
-  radiusXl: string;
-
-  // Ant Design token overrides
-  antBorderRadius: number;
-  antColorBgContainer: string;
-  antColorBorder: string;
+  /* Typography */
+  fontMono: string;
+  fontSans: string;
+  antFontSize: number;
 }
 
-/* ─── Theme 1: macOS Glass (current default) ─── */
+/* ────── Theme 1: macOS Glass ────── */
 const macosGlass: ThemeDefinition = {
   id: 'macos-glass',
   label: 'macOS 毛玻璃',
   description: '轻盈、通透、克制的 macOS 风格毛玻璃设计',
 
-  colorAccent: '#5B7F95',
-  colorAccentHover: '#4A6B7F',
-  colorAccentLight: 'rgba(91, 127, 149, 0.08)',
-  colorAccentSubtle: 'rgba(91, 127, 149, 0.04)',
-  colorTextPrimary: '#333333',
-  colorTextSecondary: '#888888',
-  colorTextTertiary: '#b0b0b0',
+  light: {
+    bg: '#F7F9FC',
+    bgSecondary: '#FFFFFF',
+    textPrimary: '#333333',
+    textSecondary: '#888888',
+    textTertiary: '#b0b0b0',
+    border: '#eeeeee',
+    borderLight: '#f5f5f5',
+    accent: '#5B7F95',
+    accentHover: '#4A6B7F',
+    accentLight: 'rgba(91,127,149,0.08)',
+  },
+  dark: {
+    bg: '#1a1a1a',
+    bgSecondary: '#252525',
+    textPrimary: '#e0e0e0',
+    textSecondary: '#999999',
+    textTertiary: '#666666',
+    border: '#333333',
+    borderLight: '#2a2a2a',
+    accent: '#6B8FA5',
+    accentHover: '#5B7F95',
+    accentLight: 'rgba(107,143,165,0.12)',
+  },
 
-  bgApp: 'linear-gradient(135deg, #F7F9FC 0%, #EFF2F7 100%)',
-  bgGlass: 'rgba(255, 255, 255, 0.65)',
-  bgGlassHover: 'rgba(255, 255, 255, 0.85)',
-  bgGlassActive: 'rgba(255, 255, 255, 0.95)',
-  bgCard: 'rgba(255, 255, 255, 0.55)',
-  bgSidebar: 'rgba(255, 255, 255, 0.4)',
-  bgTopbar: 'rgba(255, 255, 255, 0.55)',
-  bgInput: 'rgba(255, 255, 255, 0.7)',
+  sidebarWidth: 240,
+  sidebarCollapsedWidth: 64,
+  buttonRadius: 12,
 
-  glassBlur: 'blur(20px)',
-  glassBlurLight: 'blur(10px)',
+  hasGlass: true,
+  hasCardShadow: true,
+  hasCardRadius: true,
 
-  borderThin: '1px solid rgba(255, 255, 255, 0.8)',
-  borderSubtle: '1px solid rgba(0, 0, 0, 0.06)',
-  borderHover: '1px solid rgba(91, 127, 149, 0.2)',
+  fontMono: "'SF Mono', 'JetBrains Mono', 'Consolas', monospace",
+  fontSans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  antFontSize: 14,
+};
 
-  shadowCard: '0 4px 12px rgba(0, 0, 0, 0.03)',
-  shadowElevated: '0 8px 24px rgba(0, 0, 0, 0.05)',
+/* ────── Theme 2: Kimi Minimal ────── */
+const kimiMinimal: ThemeDefinition = {
+  id: 'kimi-minimal',
+  label: 'Kimi Minimal',
+  description: '极致极简、学术护眼、零装饰的功能优先设计',
 
-  radiusSm: '8px',
-  radiusMd: '12px',
-  radiusLg: '16px',
-  radiusXl: '20px',
+  light: {
+    bg: '#ffffff',
+    bgSecondary: '#fafafa',
+    textPrimary: '#111111',
+    textSecondary: '#555555',
+    textTertiary: '#999999',
+    border: '#eeeeee',
+    borderLight: '#f5f5f5',
+    accent: '#2563eb',
+    accentHover: '#1d4ed8',
+    accentLight: 'rgba(37,99,235,0.08)',
+  },
+  dark: {
+    bg: '#0a0a0a',
+    bgSecondary: '#141414',
+    textPrimary: '#e8e8e8',
+    textSecondary: '#a0a0a0',
+    textTertiary: '#666666',
+    border: '#222222',
+    borderLight: '#1a1a1a',
+    accent: '#3b82f6',
+    accentHover: '#60a5fa',
+    accentLight: 'rgba(59,130,246,0.12)',
+  },
 
-  antBorderRadius: 12,
-  antColorBgContainer: 'rgba(255,255,255,0.65)',
-  antColorBorder: 'rgba(0,0,0,0.06)',
+  sidebarWidth: 200,
+  sidebarCollapsedWidth: 56,
+  buttonRadius: 8,
+
+  hasGlass: false,
+  hasCardShadow: false,
+  hasCardRadius: false,
+
+  fontMono: "'JetBrains Mono', 'SF Mono', 'Consolas', monospace",
+  fontSans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  antFontSize: 14,
 };
 
 /* ─── Theme Registry ─── */
-export const THEMES: ThemeDefinition[] = [macosGlass];
+export const THEMES: ThemeDefinition[] = [macosGlass, kimiMinimal];
 
 export const DEFAULT_THEME_ID = 'macos-glass';
 

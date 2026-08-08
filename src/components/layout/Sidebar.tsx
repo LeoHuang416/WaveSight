@@ -4,6 +4,8 @@ import {
   HomeOutlined, ImportOutlined, ExperimentOutlined,
   BarChartOutlined, HistoryOutlined, SettingOutlined, ClearOutlined,
 } from '@ant-design/icons';
+import { useSettingsStore } from '@/stores/useSettingsStore';
+import { getTheme } from '@/themes';
 
 const menuItems = [
   { key: '/', icon: <HomeOutlined />, label: '总览' },
@@ -18,6 +20,11 @@ const menuItems = [
 export default function Sidebar({ collapsed }: { collapsed: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
+  const appearanceMode = useSettingsStore((s) => s.appearanceMode);
+  const t = getTheme(uiTheme);
+  const colors = appearanceMode === 'dark' ? t.dark : t.light;
+  const isKimi = uiTheme === 'kimi-minimal';
 
   return (
     <div
@@ -25,27 +32,30 @@ export default function Sidebar({ collapsed }: { collapsed: boolean }) {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        padding: '12px 0',
+        padding: isKimi ? '8px 0' : '12px 0',
         overflow: 'hidden',
       }}
     >
       {/* Logo area */}
       <div
         style={{
-          padding: collapsed ? '8px 16px' : '12px 20px',
-          marginBottom: 8,
+          padding: collapsed ? '8px 12px' : '12px 16px',
+          marginBottom: isKimi ? 0 : 8,
           display: 'flex',
           alignItems: 'center',
           gap: 10,
           transition: 'all 0.2s ease-in-out',
+          borderBottom: isKimi && !collapsed ? `1px solid ${colors.border}` : 'none',
         }}
       >
-        <span style={{ fontSize: 22, lineHeight: 1 }}>📊</span>
+        <span style={{ fontSize: collapsed ? 18 : 22, lineHeight: 1 }}>
+          {isKimi ? '⚗' : '📊'}
+        </span>
         {!collapsed && (
           <span style={{
             fontSize: 13,
             fontWeight: 600,
-            color: '#333',
+            color: colors.textPrimary,
             whiteSpace: 'nowrap',
           }}>
             数据工作台
@@ -64,7 +74,7 @@ export default function Sidebar({ collapsed }: { collapsed: boolean }) {
           background: 'transparent',
           border: 'none',
           flex: 1,
-          paddingTop: 4,
+          paddingTop: isKimi ? 8 : 4,
         }}
       />
     </div>

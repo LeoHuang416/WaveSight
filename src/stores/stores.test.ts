@@ -26,8 +26,22 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().uiTheme).toBe('macos-glass');
   });
   it('switches theme', () => {
+    useSettingsStore.getState().setUiTheme('kimi-minimal');
+    expect(useSettingsStore.getState().uiTheme).toBe('kimi-minimal');
     useSettingsStore.getState().setUiTheme('macos-glass');
-    expect(useSettingsStore.getState().uiTheme).toBe('macos-glass');
+  });
+  it('has default appearance mode light', () => {
+    expect(useSettingsStore.getState().appearanceMode).toBe('light');
+  });
+  it('toggles dark mode', () => {
+    useSettingsStore.getState().setAppearanceMode('dark');
+    expect(useSettingsStore.getState().appearanceMode).toBe('dark');
+    useSettingsStore.getState().setAppearanceMode('light');
+  });
+  it('has kimi defaults', () => {
+    expect(useSettingsStore.getState().kimiRowHeight).toBe('standard');
+    expect(useSettingsStore.getState().kimiFontSize).toBe('standard');
+    expect(useSettingsStore.getState().kimiDataAlign).toBe('auto');
   });
   it('supports csv as export format', () => {
     expect(useSettingsStore.getState().defaultExportFormat).toBe('svg');
