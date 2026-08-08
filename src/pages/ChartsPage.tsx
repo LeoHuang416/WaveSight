@@ -264,7 +264,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       };
     }
     case 'surface3d': {
-      // Paper-quality 3D surface via echarts-gl — proper filled grid mesh
+      // 3D surface: bin data onto a regular grid, fill holes, triangulate as flat [x,y,z] points
       const sx = nums[0], sy = nums[1] ?? nums[0];
       const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
       if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
@@ -274,10 +274,8 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       const gridSize = 25;
       const xStep = (xMax - xMin) / (gridSize - 1) || 1;
       const yStep = (yMax - yMin) / (gridSize - 1) || 1;
-      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep).toFixed(2));
-      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep).toFixed(2));
 
-      // Aggregate into grid with interpolation for empty cells
+      // Bin data points into grid cells
       const gridSum: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
       const gridCount: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
       sData.forEach(([x, y]) => {
@@ -287,10 +285,10 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         gridCount[yi][xi]++;
       });
 
-      // Fill holes: take mean of non-empty neighbors, then fall through until stable
+      // Compute z for cells with data
       const zGrid: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(NaN));
       let zMin = Infinity, zMax = -Infinity;
-      const filled: [number, number][] = [];
+      let filledCount = 0;
       for (let yi = 0; yi < gridSize; yi++) {
         for (let xi = 0; xi < gridSize; xi++) {
           if (gridCount[yi][xi] > 0) {
@@ -298,15 +296,13 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
             zGrid[yi][xi] = z;
             if (z < zMin) zMin = z;
             if (z > zMax) zMax = z;
-            filled.push([xi, yi]);
+            filledCount++;
           }
         }
       }
+      if (filledCount < 3) return { ...base, series: [{ type: 'bar', data: [] }] };
 
-      // If too few filled cells, no surface
-      if (filled.length < 3) return { ...base, series: [{ type: 'bar', data: [] }] };
-
-      // Nearest-neighbor fill for empty cells over multiple passes
+      // Fill empty cells via nearest-neighbor smoothing
       for (let pass = 0; pass < 5; pass++) {
         let changed = false;
         for (let yi = 0; yi < gridSize; yi++) {
@@ -327,14 +323,15 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         if (!changed) break;
       }
 
-      // Build matrix of z values for surface (yi rows, xi cols)
-      const matrix: number[][] = [];
+      // Build flat [x, y, z] points for every grid cell → proper triangulated surface
+      const surfData: number[][] = [];
       for (let yi = 0; yi < gridSize; yi++) {
-        const row: number[] = [];
+        const yVal = +(yMin + yi * yStep).toFixed(4);
         for (let xi = 0; xi < gridSize; xi++) {
-          row.push(+(zGrid[yi][xi] || 0).toFixed(4));
+          const xVal = +(xMin + xi * xStep).toFixed(4);
+          const zVal = +(zGrid[yi][xi] || 0).toFixed(4);
+          surfData.push([xVal, yVal, zVal]);
         }
-        matrix.push(row);
       }
 
       if (zMin === Infinity) { zMin = 0; zMax = 1; }
@@ -372,7 +369,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         },
         series: [{
           type: 'surface',
-          data: matrix,
+          data: surfData,
           shading: 'realistic',
           realisticMaterial: { roughness: 0.3, metalness: 0.05 },
           itemStyle: { opacity: 0.95 },
