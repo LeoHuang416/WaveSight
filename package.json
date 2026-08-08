@@ -6,30 +6,38 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0",
-    "antd": "^5.20.0",
     "@ant-design/icons": "^5.4.0",
+    "antd": "^5.20.0",
+    "dexie": "^3.2.7",
     "echarts": "^5.5.1",
     "echarts-for-react": "^3.0.2",
-    "zustand": "^4.5.4",
-    "dexie": "^3.2.7",
     "jstat": "^1.9.6",
     "ml-pca": "^4.1.1",
     "ml-regression": "^6.0.0",
     "papaparse": "^5.4.1",
-    "xlsx": "^0.18.5"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.3",
+    "@types/papaparse": "^5.3.14",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@types/papaparse": "^5.3.14",
-    "typescript": "^5.5.4",
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.3.5"
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.3.5",
+    "vitest": "^4.1.10"
   }
 }
