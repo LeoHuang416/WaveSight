@@ -52,7 +52,7 @@ export default function SettingsPage() {
         <Card title="图表默认值" size="small">
           <Space direction="vertical">
             <Space><Text>默认配色</Text><Radio.Group value={defaultColorScheme} onChange={(e) => setDefaultColorScheme(e.target.value)}><Radio value="grayscale">学术灰度</Radio><Radio value="color">彩色</Radio></Radio.Group></Space>
-            <Space><Text>导出格式</Text><Select value={defaultExportFormat} onChange={setDefaultExportFormat} style={{ width: 100 }} options={[{ label: 'SVG', value: 'svg' }, { label: 'PNG', value: 'png' }]} /></Space>
+            <Space><Text>导出格式</Text><Select value={defaultExportFormat} onChange={setDefaultExportFormat} style={{ width: 100 }} options={[{ label: 'SVG', value: 'svg' }, { label: 'PNG', value: 'png' }, { label: 'CSV', value: 'csv' }]} /></Space>
           </Space>
         </Card>
 

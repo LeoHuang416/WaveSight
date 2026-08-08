@@ -22,6 +22,12 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().significantDigits).toBe(4);
     useSettingsStore.getState().setSignificantDigits(3);
   });
+  it('supports csv as export format', () => {
+    expect(useSettingsStore.getState().defaultExportFormat).toBe('svg');
+    useSettingsStore.getState().setDefaultExportFormat('csv');
+    expect(useSettingsStore.getState().defaultExportFormat).toBe('csv');
+    useSettingsStore.getState().setDefaultExportFormat('svg');
+  });
 });
 
 describe('useDataStore', () => {
