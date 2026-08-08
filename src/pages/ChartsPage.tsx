@@ -285,10 +285,9 @@ function simpleOption(
       const sz = columnMapping?.zCol || nums[2] || nums[1] || nums[0];
       const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy]), Number(r[sz])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]) && !isNaN(v[2]));
       if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
-      const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]), zVals = sData.map((d) => d[2]);
+      const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]);
       const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
-      const zMin = Math.min(...zVals), zMax = Math.max(...zVals);
       const gridSize = 25;
       const xStep = (xMax - xMin) / (gridSize - 1) || 1;
       const yStep = (yMax - yMin) / (gridSize - 1) || 1;
@@ -336,27 +335,24 @@ function simpleOption(
         if (!changed) break;
       }
 
-      // Build z-value matrix (yi rows, xi cols) → echarts-gl renders as proper mesh grid
-      const matrix: number[][] = [];
+      // Build flat [x, y, z] triplets, row-major: Y outer loop, X inner (X changes first)
+      const surfData: number[][] = [];
       let gridZMin = Infinity, gridZMax = -Infinity;
       for (let yi = 0; yi < gridSize; yi++) {
-        const row: number[] = [];
+        const yVal = yMin + yi * yStep;
         for (let xi = 0; xi < gridSize; xi++) {
           const zVal = zGrid[yi][xi];
-          const z = isNaN(zVal) ? 0 : +zVal.toFixed(4);
-          row.push(z);
-          if (!isNaN(zVal)) {
-            if (zVal < gridZMin) gridZMin = zVal;
-            if (zVal > gridZMax) gridZMax = zVal;
-          }
+          if (isNaN(zVal)) continue;
+          const xVal = xMin + xi * xStep;
+          surfData.push([xVal, yVal, zVal]);
+          if (zVal < gridZMin) gridZMin = zVal;
+          if (zVal > gridZMax) gridZMax = zVal;
         }
-        matrix.push(row);
       }
-      if (gridZMin === Infinity) { gridZMin = 0; gridZMax = 1; }
+      if (surfData.length < 9) return { ...base, series: [{ type: 'bar', data: [] }] };
 
       const clipMin = gridZMin + (gridZMax - gridZMin) * 0.02;
       const clipMax = gridZMax - (gridZMax - gridZMin) * 0.02;
-      // Nudge zMin down 5% so surface bottom touches the X-Y plane
       const zAxisMin = gridZMin - (gridZMax - gridZMin) * 0.05;
 
       return {
@@ -369,15 +365,15 @@ function simpleOption(
           text: [String(clipMax.toFixed(2)), String(clipMin.toFixed(2))], textStyle: { fontSize: 10, fontFamily: 'Times New Roman' },
           itemWidth: 14, itemHeight: 200,
         },
-        xAxis3D: { type: 'value', name: sx, min: 0, max: gridSize - 1,
+        xAxis3D: { type: 'value', name: sx, min: xMin, max: xMax,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
-          axisLabel: { formatter: (v: number) => formatNumber(xMin + v * xStep, 3) },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
-        yAxis3D: { type: 'value', name: sy, min: 0, max: gridSize - 1,
+        yAxis3D: { type: 'value', name: sy, min: yMin, max: yMax,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
-          axisLabel: { formatter: (v: number) => formatNumber(yMin + v * yStep, 3) },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         zAxis3D: { type: 'value', name: sz, min: zAxisMin, max: gridZMax,
           axisLine: { lineStyle: { color: '#000' } },
@@ -393,7 +389,7 @@ function simpleOption(
         },
         series: [{
           type: 'surface',
-          data: matrix,
+          data: surfData,
           shading: 'realistic',
           realisticMaterial: { roughness: 0.3, metalness: 0.05 },
           itemStyle: { opacity: 0.95 },
