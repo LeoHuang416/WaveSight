@@ -328,19 +328,26 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         if (!changed) break;
       }
 
-      // Build [x, y, z] for every grid cell
+      // Build [x, y, z] for every grid cell and recalc zMin/zMax from actual grid
       const surfData: number[][] = [];
+      let gridZMin = Infinity, gridZMax = -Infinity;
       for (let yi = 0; yi < gridSize; yi++) {
         const yVal = +(yMin + yi * yStep).toFixed(4);
         for (let xi = 0; xi < gridSize; xi++) {
           const xVal = +(xMin + xi * xStep).toFixed(4);
-          const zVal = +(zGrid[yi][xi] || 0).toFixed(4);
-          surfData.push([xVal, yVal, zVal]);
+          const zVal = zGrid[yi][xi];
+          if (isNaN(zVal)) continue; // skip truly unfilled cells
+          surfData.push([xVal, yVal, +zVal.toFixed(4)]);
+          if (zVal < gridZMin) gridZMin = zVal;
+          if (zVal > gridZMax) gridZMax = zVal;
         }
       }
+      if (surfData.length < 9) return { ...base, series: [{ type: 'bar', data: [] }] };
 
-      const clipMin = zMin + (zMax - zMin) * 0.02;
-      const clipMax = zMax - (zMax - zMin) * 0.02;
+      const clipMin = gridZMin + (gridZMax - gridZMin) * 0.02;
+      const clipMax = gridZMax - (gridZMax - gridZMin) * 0.02;
+      // Nudge zMin down 5% so surface bottom touches (not hovers above) the X-Y plane
+      const zAxisMin = gridZMin - (gridZMax - gridZMin) * 0.05;
 
       return {
         ...base,
@@ -360,7 +367,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
-        zAxis3D: { type: 'value', name: sz, min: zMin, max: zMax,
+        zAxis3D: { type: 'value', name: sz, min: zAxisMin, max: gridZMax,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
