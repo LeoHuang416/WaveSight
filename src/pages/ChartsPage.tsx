@@ -6,7 +6,7 @@ import 'echarts-gl';
 import { useChartStore } from '@/stores/useChartStore';
 import { useDataStore } from '@/stores/useDataStore';
 import { exportPNG, exportCSV } from '@/utils/export';
-import { generateId } from '@/utils/format';
+import { generateId, formatNumber } from '@/utils/format';
 import type { ChartConfig, ChartType, ColorScheme } from '@/types/chart';
 
 const { Title, Text } = Typography;
@@ -20,7 +20,13 @@ const CHART_LABELS: Record<ChartType, string> = {
 
 const GRAY = ['#1a1a1a', '#4d4d4d', '#808080', '#b3b3b3', '#d9d9d9', '#f0f0f0'];
 
-function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['currentDataset'], chartType: ChartType, title: string, colorScheme: ColorScheme): Record<string, unknown> {
+function simpleOption(
+  dataset: ReturnType<typeof useDataStore.getState>['currentDataset'],
+  chartType: ChartType,
+  title: string,
+  colorScheme: ColorScheme,
+  columnMapping?: Record<string, string>,
+): Record<string, unknown> {
   const colors = colorScheme === 'grayscale' ? GRAY : undefined;
   const base: Record<string, unknown> = { title: { text: title, left: 'center' }, color: colors, backgroundColor: '#fff' };
   if (!dataset) return base;
@@ -273,8 +279,10 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       };
     }
     case 'surface3d': {
-      // 3D surface: X/Y form the plane, Z is the response height. Needs ≥3 numeric columns.
-      const sx = nums[0], sy = nums[1] ?? nums[0], sz = nums[2] ?? nums[1] ?? nums[0];
+      // 3D surface: X/Y form the plane, Z is the response height.
+      const sx = columnMapping?.xCol || nums[0];
+      const sy = columnMapping?.yCol || nums[1] || nums[0];
+      const sz = columnMapping?.zCol || nums[2] || nums[1] || nums[0];
       const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy]), Number(r[sz])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]) && !isNaN(v[2]));
       if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
       const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]), zVals = sData.map((d) => d[2]);
@@ -362,14 +370,17 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         xAxis3D: { type: 'value', name: sx, min: xMin, max: xMax,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         yAxis3D: { type: 'value', name: sy, min: yMin, max: yMax,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         zAxis3D: { type: 'value', name: sz, min: zAxisMin, max: gridZMax,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         grid3D: {
           environment: '#ffffff',
@@ -426,8 +437,39 @@ export default function ChartsPage() {
           <Card className="glass-card" size="small" title="编辑图表" bodyStyle={{ padding: '16px' }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <Input addonBefore="标题" value={chart.title} onChange={(e) => addChart({ ...chart, title: e.target.value, echartsOption: { ...chart.echartsOption as Record<string, unknown>, title: { text: e.target.value, left: 'center' } } })} />
-              <Select value={chart.chartType} style={{ width: '100%' }} onChange={(v: ChartType) => addChart({ ...chart, chartType: v, echartsOption: simpleOption(currentDataset, v, chart.title, chart.colorScheme) })} options={Object.entries(CHART_LABELS).map(([k, v]) => ({ label: v, value: k }))} />
-              <Radio.Group value={chart.colorScheme} onChange={(e) => { const v = e.target.value as ColorScheme; addChart({ ...chart, colorScheme: v, echartsOption: simpleOption(currentDataset, chart.chartType, chart.title, v) }); }}>
+              <Select value={chart.chartType} style={{ width: '100%' }} onChange={(v: ChartType) => addChart({ ...chart, chartType: v, echartsOption: simpleOption(currentDataset, v, chart.title, chart.colorScheme, chart.columnMapping as Record<string, string>) })} options={Object.entries(CHART_LABELS).map(([k, v]) => ({ label: v, value: k }))} />
+              {chart.chartType === 'surface3d' && currentDataset && (
+                <>
+                  <Space style={{ width: '100%' }} direction="vertical" size={4}>
+                    <Text style={{ fontSize: 12 }}>X 轴变量</Text>
+                    <Select size="small" style={{ width: '100%' }} value={(chart.columnMapping as Record<string, string>)?.xCol ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[0]}
+                      onChange={(v) => {
+                        const cm = { ...chart.columnMapping as Record<string, string>, xCol: v };
+                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, 'surface3d', chart.title, chart.colorScheme, cm) });
+                      }}
+                      options={currentDataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => ({ label: c.name, value: c.name }))} />
+                  </Space>
+                  <Space style={{ width: '100%' }} direction="vertical" size={4}>
+                    <Text style={{ fontSize: 12 }}>Y 轴变量</Text>
+                    <Select size="small" style={{ width: '100%' }} value={(chart.columnMapping as Record<string, string>)?.yCol ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[1] ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[0]}
+                      onChange={(v) => {
+                        const cm = { ...chart.columnMapping as Record<string, string>, yCol: v };
+                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, 'surface3d', chart.title, chart.colorScheme, cm) });
+                      }}
+                      options={currentDataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => ({ label: c.name, value: c.name }))} />
+                  </Space>
+                  <Space style={{ width: '100%' }} direction="vertical" size={4}>
+                    <Text style={{ fontSize: 12 }}>Z 轴变量（响应值）</Text>
+                    <Select size="small" style={{ width: '100%' }} value={(chart.columnMapping as Record<string, string>)?.zCol ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[2] ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[1] ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[0]}
+                      onChange={(v) => {
+                        const cm = { ...chart.columnMapping as Record<string, string>, zCol: v };
+                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, 'surface3d', chart.title, chart.colorScheme, cm) });
+                      }}
+                      options={currentDataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => ({ label: c.name, value: c.name }))} />
+                  </Space>
+                </>
+              )}
+              <Radio.Group value={chart.colorScheme} onChange={(e) => { const v = e.target.value as ColorScheme; addChart({ ...chart, colorScheme: v, echartsOption: simpleOption(currentDataset, chart.chartType, chart.title, v, chart.columnMapping as Record<string, string>) }); }}>
                 <Radio value="grayscale">学术灰度</Radio><Radio value="color">彩色</Radio>
               </Radio.Group>
               <Button icon={<DownloadOutlined />} onClick={() => echartsRef && exportPNG(echartsRef.getEchartsInstance(), chart.title)} block>导出 PNG</Button>
