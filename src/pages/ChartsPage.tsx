@@ -264,45 +264,41 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       };
     }
     case 'surface3d': {
-      // 3D surface: bin data onto a regular grid, fill holes, triangulate as flat [x,y,z] points
-      const sx = nums[0], sy = nums[1] ?? nums[0];
-      const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
+      // 3D surface: X/Y form the plane, Z is the response height. Needs ≥3 numeric columns.
+      const sx = nums[0], sy = nums[1] ?? nums[0], sz = nums[2] ?? nums[1] ?? nums[0];
+      const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy]), Number(r[sz])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]) && !isNaN(v[2]));
       if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
-      const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]);
+      const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]), zVals = sData.map((d) => d[2]);
       const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
+      const zMin = Math.min(...zVals), zMax = Math.max(...zVals);
       const gridSize = 25;
       const xStep = (xMax - xMin) / (gridSize - 1) || 1;
       const yStep = (yMax - yMin) / (gridSize - 1) || 1;
 
-      // Bin data points into grid cells
+      // Bin (x, y, z) triples into grid, averaging z per cell
       const gridSum: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
       const gridCount: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
-      sData.forEach(([x, y]) => {
+      sData.forEach(([x, y, z]) => {
         const xi = Math.min(Math.round((x - xMin) / xStep), gridSize - 1);
         const yi = Math.min(Math.round((y - yMin) / yStep), gridSize - 1);
-        gridSum[yi][xi] += y;
+        gridSum[yi][xi] += z;
         gridCount[yi][xi]++;
       });
 
-      // Compute z for cells with data
       const zGrid: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(NaN));
-      let zMin = Infinity, zMax = -Infinity;
       let filledCount = 0;
       for (let yi = 0; yi < gridSize; yi++) {
         for (let xi = 0; xi < gridSize; xi++) {
           if (gridCount[yi][xi] > 0) {
-            const z = gridSum[yi][xi] / gridCount[yi][xi];
-            zGrid[yi][xi] = z;
-            if (z < zMin) zMin = z;
-            if (z > zMax) zMax = z;
+            zGrid[yi][xi] = gridSum[yi][xi] / gridCount[yi][xi];
             filledCount++;
           }
         }
       }
       if (filledCount < 3) return { ...base, series: [{ type: 'bar', data: [] }] };
 
-      // Fill empty cells via nearest-neighbor smoothing
+      // Fill holes via nearest-neighbor smoothing
       for (let pass = 0; pass < 5; pass++) {
         let changed = false;
         for (let yi = 0; yi < gridSize; yi++) {
@@ -323,7 +319,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         if (!changed) break;
       }
 
-      // Build flat [x, y, z] points for every grid cell → proper triangulated surface
+      // Build [x, y, z] for every grid cell
       const surfData: number[][] = [];
       for (let yi = 0; yi < gridSize; yi++) {
         const yVal = +(yMin + yi * yStep).toFixed(4);
@@ -334,7 +330,6 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         }
       }
 
-      if (zMin === Infinity) { zMin = 0; zMax = 1; }
       const clipMin = zMin + (zMax - zMin) * 0.02;
       const clipMax = zMax - (zMax - zMin) * 0.02;
 
@@ -356,7 +351,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
-        zAxis3D: { type: 'value', name: 'Z',
+        zAxis3D: { type: 'value', name: sz, min: zMin, max: zMax,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
