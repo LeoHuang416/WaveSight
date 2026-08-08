@@ -36,6 +36,25 @@ export default function CleaningPage() {
     message.success('更改已应用');
   };
 
+  const renameColumn = useCallback((oldName: string, newName: string) => {
+    const src = pendingDataset ?? currentDataset;
+    if (!src || !newName || oldName === newName) return;
+    const ds = JSON.parse(JSON.stringify(src)) as Dataset;
+    const targetCol = ds.columns.find((c) => c.name === oldName);
+    if (targetCol) targetCol.name = newName;
+    // also rename in rows
+    ds.rows = ds.rows.map((row) => {
+      if (oldName in row) {
+        const newRow = { ...row, [newName]: row[oldName] };
+        delete newRow[oldName];
+        return newRow;
+      }
+      return row;
+    });
+    setPendingDataset(ds);
+    setHasChanges(true);
+  }, [pendingDataset, currentDataset]);
+
   const handleMissingValues = useCallback(() => {
     initPending();
     if (!pendingDataset && !currentDataset) return;
@@ -132,18 +151,7 @@ export default function CleaningPage() {
                 <span>重命名列:</span>
                 {dataset.columns.slice(0, 5).map((col) => (
                   <Input key={col.name} size="small" style={{ width: 120 }} defaultValue={col.name}
-                    onBlur={(e) => {
-                      if (e.target.value && e.target.value !== col.name) {
-                        initPending();
-                        if (!pendingDataset && currentDataset) {
-                          const ds = JSON.parse(JSON.stringify(currentDataset)) as Dataset;
-                          const targetCol = ds.columns.find((c) => c.name === col.name);
-                          if (targetCol) targetCol.name = e.target.value;
-                          setPendingDataset(ds);
-                        }
-                        setHasChanges(true);
-                      }
-                    }} />
+                    onBlur={(e) => renameColumn(col.name, e.target.value)} />
                 ))}
               </Space>
             </Space>
