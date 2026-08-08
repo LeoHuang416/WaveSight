@@ -38,11 +38,23 @@ describe('App Layout', () => {
 });
 
 describe('HomePage', () => {
-  it('shows empty state when no data', () => {
+  it('shows welcome content when no data', () => {
     render(<Wrapper><HomePage /></Wrapper>);
+    expect(screen.getByText('欢迎使用实验数据分析工作台')).toBeDefined();
     expect(screen.getByText('导入实验数据')).toBeDefined();
-    const empties = screen.getAllByText('暂无数据');
-    expect(empties.length).toBeGreaterThan(0);
+  });
+  it('shows feature cards', () => {
+    render(<Wrapper><HomePage /></Wrapper>);
+    expect(screen.getByText('数据导入')).toBeDefined();
+    expect(screen.getByText('数据清洗')).toBeDefined();
+    expect(screen.getByText('统计分析')).toBeDefined();
+    expect(screen.getByText('图表可视化')).toBeDefined();
+  });
+  it('shows quick start steps', () => {
+    render(<Wrapper><HomePage /></Wrapper>);
+    expect(screen.getByText(/快速开始/)).toBeDefined();
+    expect(screen.getByText(/导入数据/)).toBeDefined();
+    expect(screen.getByText(/清洗数据/)).toBeDefined();
   });
 });
 
