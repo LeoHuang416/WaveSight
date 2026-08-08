@@ -264,7 +264,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       };
     }
     case 'surface3d': {
-      // Paper-quality 3D surface via echarts-gl
+      // Paper-quality 3D surface via echarts-gl — proper filled grid mesh
       const sx = nums[0], sy = nums[1] ?? nums[0];
       const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
       if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
@@ -272,33 +272,72 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
       const gridSize = 25;
-      const xStep = (xMax - xMin) / gridSize || 1;
-      const yStep = (yMax - yMin) / gridSize || 1;
-      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep + xStep / 2).toFixed(2));
-      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep + yStep / 2).toFixed(2));
+      const xStep = (xMax - xMin) / (gridSize - 1) || 1;
+      const yStep = (yMax - yMin) / (gridSize - 1) || 1;
+      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep).toFixed(2));
+      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep).toFixed(2));
 
-      // Aggregate into meshgrid
-      const gridCount: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+      // Aggregate into grid with interpolation for empty cells
       const gridSum: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+      const gridCount: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
       sData.forEach(([x, y]) => {
-        const xi = Math.min(Math.floor((x - xMin) / xStep), gridSize - 1);
-        const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
+        const xi = Math.min(Math.round((x - xMin) / xStep), gridSize - 1);
+        const yi = Math.min(Math.round((y - yMin) / yStep), gridSize - 1);
         gridSum[yi][xi] += y;
         gridCount[yi][xi]++;
       });
-      const surfData: number[][] = [];
+
+      // Fill holes: take mean of non-empty neighbors, then fall through until stable
+      const zGrid: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(NaN));
       let zMin = Infinity, zMax = -Infinity;
+      const filled: [number, number][] = [];
       for (let yi = 0; yi < gridSize; yi++) {
         for (let xi = 0; xi < gridSize; xi++) {
           if (gridCount[yi][xi] > 0) {
-            const z = +(gridSum[yi][xi] / gridCount[yi][xi]).toFixed(4);
-            surfData.push([xi, yi, z]);
+            const z = gridSum[yi][xi] / gridCount[yi][xi];
+            zGrid[yi][xi] = z;
             if (z < zMin) zMin = z;
             if (z > zMax) zMax = z;
+            filled.push([xi, yi]);
           }
         }
       }
-      if (surfData.length === 0) return { ...base, series: [{ type: 'bar', data: [] }] };
+
+      // If too few filled cells, no surface
+      if (filled.length < 3) return { ...base, series: [{ type: 'bar', data: [] }] };
+
+      // Nearest-neighbor fill for empty cells over multiple passes
+      for (let pass = 0; pass < 5; pass++) {
+        let changed = false;
+        for (let yi = 0; yi < gridSize; yi++) {
+          for (let xi = 0; xi < gridSize; xi++) {
+            if (!isNaN(zGrid[yi][xi])) continue;
+            let sum = 0, cnt = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                const nx = xi + dx, ny = yi + dy;
+                if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !isNaN(zGrid[ny][nx])) {
+                  sum += zGrid[ny][nx]; cnt++;
+                }
+              }
+            }
+            if (cnt > 0) { zGrid[yi][xi] = sum / cnt; changed = true; }
+          }
+        }
+        if (!changed) break;
+      }
+
+      // Build matrix of z values for surface (yi rows, xi cols)
+      const matrix: number[][] = [];
+      for (let yi = 0; yi < gridSize; yi++) {
+        const row: number[] = [];
+        for (let xi = 0; xi < gridSize; xi++) {
+          row.push(+(zGrid[yi][xi] || 0).toFixed(4));
+        }
+        matrix.push(row);
+      }
+
+      if (zMin === Infinity) { zMin = 0; zMax = 1; }
       const clipMin = zMin + (zMax - zMin) * 0.02;
       const clipMax = zMax - (zMax - zMin) * 0.02;
 
@@ -306,22 +345,18 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         ...base,
         backgroundColor: '#ffffff',
         title: { text: title, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-        tooltip: { trigger: 'item', formatter: (p: Record<string, unknown>) => {
-          const d = p.data as number[]; return `${sx}: ${xLabels[d[0]]}<br/>${sy}: ${yLabels[d[1]]}<br/>Z: ${d[2]}`;
-        }},
+        tooltip: {},
         visualMap: { min: +clipMin.toFixed(3), max: +clipMax.toFixed(3), calculable: true, orient: 'vertical', right: 15, top: 60, bottom: 40,
           inRange: { color: ['#440154', '#482878', '#3e4989', '#31688e', '#26828e', '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'] },
-          text: [sx, sy], textStyle: { fontSize: 10, fontFamily: 'Times New Roman' },
+          text: [String(clipMax.toFixed(2)), String(clipMin.toFixed(2))], textStyle: { fontSize: 10, fontFamily: 'Times New Roman' },
           itemWidth: 14, itemHeight: 200,
         },
-        xAxis3D: { type: 'value', name: sx, min: 0, max: gridSize - 1,
+        xAxis3D: { type: 'value', name: sx, min: xMin, max: xMax,
           axisLine: { lineStyle: { color: '#000' } },
-          axisLabel: { show: false },  // hide grid indices
           splitLine: { lineStyle: { color: '#e0e0e0' } },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
-        yAxis3D: { type: 'value', name: sy, min: 0, max: gridSize - 1,
+        yAxis3D: { type: 'value', name: sy, min: yMin, max: yMax,
           axisLine: { lineStyle: { color: '#000' } },
-          axisLabel: { show: false },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         zAxis3D: { type: 'value', name: 'Z',
@@ -337,7 +372,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         },
         series: [{
           type: 'surface',
-          data: surfData,
+          data: matrix,
           shading: 'realistic',
           realisticMaterial: { roughness: 0.3, metalness: 0.05 },
           itemStyle: { opacity: 0.95 },
