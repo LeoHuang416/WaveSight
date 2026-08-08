@@ -223,14 +223,14 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       };
     }
     case 'contour': {
-      // 2D contour: binned scatter density heatmap
+      // 2D contour: binned heatmap with proper centering
       const cx = nums[0], cy = nums[1] ?? nums[0];
       const cData = dataset.rows.slice(0, 500).map((r) => [Number(r[cx]), Number(r[cy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
       if (cData.length < 5) return { ...base, series: [{ type: 'scatter', data: [] }] };
       const xVals = cData.map((d) => d[0]), yVals = cData.map((d) => d[1]);
       const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
-      const gridSize = 20;
+      const gridSize = 30;
       const xStep = (xMax - xMin) / gridSize || 1;
       const yStep = (yMax - yMin) / gridSize || 1;
       const grid: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
@@ -239,33 +239,45 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
         grid[yi][xi]++;
       });
-      const contourData: [number, number, number][] = [];
+      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep + xStep / 2).toFixed(2));
+      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep + yStep / 2).toFixed(2));
+      const contourHeatData: [number, number, number][] = [];
       grid.forEach((row, yi) => row.forEach((v, xi) => {
-        contourData.push([+(xMin + xi * xStep + xStep / 2).toFixed(2), +(yMin + yi * yStep + yStep / 2).toFixed(2), v]);
+        if (v > 0) contourHeatData.push([xi, yi, v]);
       }));
+      const cMax = Math.max(...contourHeatData.map((d) => d[2]), 1);
       return {
-        ...base,
-        xAxis: { type: 'value', name: cx },
-        yAxis: { type: 'value', name: cy },
-        visualMap: { min: 0, max: Math.max(...contourData.map((d) => d[2]), 1), calculable: true, orient: 'vertical', right: 10,
-          inRange: { color: ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c', '#08306b'] } },
-        series: [{ type: 'scatter', data: contourData, symbolSize: (val: number[]) => Math.max(4, Math.min(30, val[2] * 3)),
-          itemStyle: { opacity: 0.7 } }],
+        ...base, backgroundColor: '#ffffff',
+        grid: { left: 70, right: 80, top: 50, bottom: 60 },
+        xAxis: { type: 'category', data: xLabels, name: cx, nameLocation: 'center', nameGap: 30,
+          axisLine: { lineStyle: { color: '#000', width: 1 } },
+          axisTick: { show: true, alignWithLabel: true },
+          axisLabel: { rotate: 45, fontSize: 10, interval: Math.max(0, Math.floor(gridSize / 8) - 1) } },
+        yAxis: { type: 'category', data: yLabels, name: cy, nameLocation: 'center', nameGap: 40,
+          axisLine: { lineStyle: { color: '#000', width: 1 } },
+          axisLabel: { fontSize: 10, interval: Math.max(0, Math.floor(gridSize / 8) - 1) } },
+        visualMap: { min: 0, max: cMax, calculable: true, orient: 'vertical', right: 10, top: 'center',
+          inRange: { color: ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c'] },
+          text: ['高', '低'], textStyle: { fontSize: 10 } },
+        series: [{ type: 'heatmap', data: contourHeatData,
+          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } } }],
       };
     }
     case 'surface3d': {
-      // Real 3D surface via echarts-gl
+      // Paper-quality 3D surface via echarts-gl
       const sx = nums[0], sy = nums[1] ?? nums[0];
       const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
       if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
       const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]);
       const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
-      const gridSize = 20;
+      const gridSize = 25;
       const xStep = (xMax - xMin) / gridSize || 1;
       const yStep = (yMax - yMin) / gridSize || 1;
+      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep + xStep / 2).toFixed(2));
+      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep + yStep / 2).toFixed(2));
 
-      // Aggregate z-values into grid cells
+      // Aggregate into meshgrid
       const gridCount: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
       const gridSum: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
       sData.forEach(([x, y]) => {
@@ -274,36 +286,62 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
         gridSum[yi][xi] += y;
         gridCount[yi][xi]++;
       });
-
-      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep + xStep / 2).toFixed(2));
-      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep + yStep / 2).toFixed(2));
       const surfData: number[][] = [];
+      let zMin = Infinity, zMax = -Infinity;
       for (let yi = 0; yi < gridSize; yi++) {
         for (let xi = 0; xi < gridSize; xi++) {
           if (gridCount[yi][xi] > 0) {
-            surfData.push([xi, yi, +(gridSum[yi][xi] / gridCount[yi][xi]).toFixed(3)]);
+            const z = +(gridSum[yi][xi] / gridCount[yi][xi]).toFixed(4);
+            surfData.push([xi, yi, z]);
+            if (z < zMin) zMin = z;
+            if (z > zMax) zMax = z;
           }
         }
       }
+      if (surfData.length === 0) return { ...base, series: [{ type: 'bar', data: [] }] };
+      const clipMin = zMin + (zMax - zMin) * 0.02;
+      const clipMax = zMax - (zMax - zMin) * 0.02;
 
       return {
         ...base,
-        backgroundColor: '#1a1a2e',
-        title: { text: title, left: 'center', textStyle: { color: '#eee' } },
-        tooltip: {},
-        xAxis3D: { type: 'value', name: sx, min: 0, max: gridSize - 1 },
-        yAxis3D: { type: 'value', name: sy, min: 0, max: gridSize - 1 },
-        zAxis3D: { type: 'value', name: 'Z' },
+        backgroundColor: '#ffffff',
+        title: { text: title, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+        tooltip: { trigger: 'item', formatter: (p: Record<string, unknown>) => {
+          const d = p.data as number[]; return `${sx}: ${xLabels[d[0]]}<br/>${sy}: ${yLabels[d[1]]}<br/>Z: ${d[2]}`;
+        }},
+        visualMap: { min: +clipMin.toFixed(3), max: +clipMax.toFixed(3), calculable: true, orient: 'vertical', right: 15, top: 60, bottom: 40,
+          inRange: { color: ['#440154', '#482878', '#3e4989', '#31688e', '#26828e', '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'] },
+          text: [sx, sy], textStyle: { fontSize: 10, fontFamily: 'Times New Roman' },
+          itemWidth: 14, itemHeight: 200,
+        },
+        xAxis3D: { type: 'value', name: sx, min: 0, max: gridSize - 1,
+          axisLine: { lineStyle: { color: '#000' } },
+          axisLabel: { show: false },  // hide grid indices
+          splitLine: { lineStyle: { color: '#e0e0e0' } },
+          nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
+        yAxis3D: { type: 'value', name: sy, min: 0, max: gridSize - 1,
+          axisLine: { lineStyle: { color: '#000' } },
+          axisLabel: { show: false },
+          splitLine: { lineStyle: { color: '#e0e0e0' } },
+          nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
+        zAxis3D: { type: 'value', name: 'Z',
+          axisLine: { lineStyle: { color: '#000' } },
+          splitLine: { lineStyle: { color: '#e0e0e0' } },
+          nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         grid3D: {
-          viewControl: { autoRotate: true, autoRotateSpeed: 6 },
-          boxWidth: 100, boxHeight: 100, boxDepth: 60,
+          environment: '#ffffff',
+          viewControl: { autoRotate: false, alpha: 30, beta: -50, distance: 160,
+            zoomSensitivity: 2, rotateSensitivity: 2 },
+          boxWidth: 90, boxHeight: 90, boxDepth: 50,
+          light: { main: { intensity: 1.2, shadow: true }, ambient: { intensity: 0.6 } },
         },
         series: [{
           type: 'surface',
           data: surfData,
-          shading: 'color',
-          itemStyle: { color: '#3b82f6', opacity: 0.8 },
-          wireframe: { show: false },
+          shading: 'realistic',
+          realisticMaterial: { roughness: 0.3, metalness: 0.05 },
+          itemStyle: { opacity: 0.95 },
+          wireframe: { show: true, lineStyle: { color: '#cccccc', width: 0.5 } },
         }],
       };
     }
