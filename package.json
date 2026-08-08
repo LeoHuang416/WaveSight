@@ -19,6 +19,8 @@
     "zustand": "^4.5.4",
     "dexie": "^3.2.7",
     "jstat": "^1.9.6",
+    "ml-pca": "^4.1.1",
+    "ml-regression": "^6.0.0",
     "papaparse": "^5.4.1",
     "xlsx": "^0.18.5"
   },
