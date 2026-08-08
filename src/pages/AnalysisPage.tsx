@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Select, Table, Typography, Alert, Space, Collapse, message, Spin, Empty, Descriptions } from 'antd';
-import { PlayCircleOutlined, SaveOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, SaveOutlined, DownloadOutlined, CopyOutlined } from '@ant-design/icons';
 import { useDataStore } from '@/stores/useDataStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useChartStore } from '@/stores/useChartStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { generateId, formatNumber, formatPValue } from '@/utils/format';
+import { exportCSV } from '@/utils/export';
 import { runDescriptive, runFrequency, runNormality, runGroupedStats } from '@/engine/descriptive';
 import { runIndependentTTest, runPairedTTest, runOneWayANOVA, runTukeyHSD } from '@/engine/hypothesis';
 import { runCorrelation, runLinearRegression, runNonlinearFit, runRSM, runPCA } from '@/engine/modeling';
@@ -173,6 +174,32 @@ export default function AnalysisPage() {
     message.success('图表已保存');
   };
 
+  const exportResults = () => {
+    if (!results || results.tables.length === 0) { message.warning('没有可导出的结果'); return; }
+    const allTables: string[] = [];
+    results.tables.forEach((t) => {
+      allTables.push(`\n${t.title}\n${t.headers.join(',')}`);
+      t.rows.forEach((row) => allTables.push(row.map((v) => typeof v === 'number' ? formatNumber(v, digits) : String(v ?? '')).join(',')));
+    });
+    if (results.conclusion) allTables.push(`\n结论,${results.conclusion}`);
+    const blob = new Blob(['﻿' + allTables.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `analysis-${analysisType ?? 'result'}-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    message.success('分析结果已导出为 CSV');
+  };
+
+  const copyResults = () => {
+    if (!results || results.tables.length === 0) { message.warning('没有可复制的结果'); return; }
+    const lines: string[] = [];
+    results.tables.forEach((t) => {
+      lines.push(`${t.title}\n${t.headers.join('\t')}`);
+      t.rows.forEach((row) => lines.push(row.map((v) => typeof v === 'number' ? formatNumber(v, digits) : String(v ?? '')).join('\t')));
+    });
+    if (results.conclusion) lines.push(`\n结论\t${results.conclusion}`);
+    navigator.clipboard.writeText(lines.join('\n')).then(() => message.success('已复制到剪贴板')).catch(() => message.error('复制失败'));
+  };
+
   const renderSlot = (label: string, mode: 'single' | 'multi' | undefined, value: string[] | string | undefined, onChange: (v: string[] | string | undefined) => void, options: string[]) => {
     if (mode === 'single') return <Space><Text>{label}:</Text><Select style={{ width: 180 }} value={value as string || undefined} onChange={(v) => onChange(v)} options={options.map((o) => ({ label: o, value: o }))} allowClear placeholder={`选择 ${label}`} /></Space>;
     if (mode === 'multi') return <Space><Text>{label}:</Text><Select mode="multiple" style={{ minWidth: 200 }} value={(value as string[]) || []} onChange={(v) => onChange(v)} options={options.map((o) => ({ label: o, value: o }))} placeholder={`选择 ${label}`} /></Space>;
@@ -250,6 +277,12 @@ export default function AnalysisPage() {
                   </div>
                 ))}
                 {results.conclusion && <Alert type="success" message={results.conclusion} style={{ marginBottom: 16 }} />}
+
+                <Space style={{ marginBottom: 16 }}>
+                  <Button icon={<DownloadOutlined />} onClick={exportResults}>导出 CSV</Button>
+                  <Button icon={<CopyOutlined />} onClick={copyResults}>复制结果</Button>
+                </Space>
+
                 {results.chartData?.map((cd, i) => (
                   <Button key={i} icon={<SaveOutlined />} onClick={() => saveChartToModule(cd)} style={{ marginRight: 8 }}>
                     保存图表: {cd.title}
