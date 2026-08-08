@@ -6,7 +6,7 @@ import DataTable from '@/components/data/DataTable';
 import EmptyState from '@/components/common/EmptyState';
 import type { Dataset } from '@/types/data';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 export default function CleaningPage() {
   const { currentDataset, updateCurrentDataset } = useDataStore();
@@ -44,7 +44,6 @@ export default function CleaningPage() {
     const ds = JSON.parse(JSON.stringify(src)) as Dataset;
     const targetCol = ds.columns.find((c) => c.name === oldName);
     if (targetCol) targetCol.name = newName;
-    // also rename in rows
     ds.rows = ds.rows.map((row) => {
       if (oldName in row) {
         const newRow = { ...row, [newName]: row[oldName] };
@@ -113,11 +112,8 @@ export default function CleaningPage() {
         }
       });
     }
-    // Mark outliers: set them to null in the dataset
-    for (const h of highlights) {
-      ds.rows[h.row][h.col] = null;
-    }
-    ds.rowCount = ds.rows.length; // unchanged but kept for consistency
+    for (const h of highlights) ds.rows[h.row][h.col] = null;
+    ds.rowCount = ds.rows.length;
     setPendingDataset(ds);
     setOutlierHighlights(highlights);
     setOutlierCount(highlights.length);
@@ -131,83 +127,90 @@ export default function CleaningPage() {
   }, [dataset]);
 
   if (!dataset) {
-    return <div style={{ padding: 24 }}>
-      <Title level={4}>数据清洗</Title>
-      <EmptyState description="请先导入数据" actionText="前往导入 →" actionPath="/import" />
-    </div>;
+    return (
+      <div style={{ padding: '4px 0 24px' }}>
+        <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>数据清洗</Title>
+        <EmptyState description="请先导入数据" actionText="前往导入 →" actionPath="/import" />
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <Title level={4}>数据清洗</Title>
-      <Tabs items={[
-        {
-          key: 'missing', label: '缺失值',
-          children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Space>
-                <span>适用列:</span>
-                <Select mode="multiple" style={{ minWidth: 200 }} value={missingTargetCols} onChange={setMissingTargetCols}
-                  options={[
-                    { label: '全部数值列', value: '__all_numeric__' },
-                    ...dataset.columns.map((c) => ({ label: c.name, value: c.name })),
-                  ]} />
-              </Space>
-              <Radio.Group value={missingMethod} onChange={(e) => setMissingMethod(e.target.value)}>
-                <Radio value="delete">删除含缺失值的行</Radio>
-                <Radio value="fill">填充缺失值</Radio>
-                <Radio value="mark">仅标记，不处理</Radio>
-              </Radio.Group>
-              {missingMethod === 'fill' && <Space>
-                <Radio.Group value={fillStrategy} onChange={(e) => setFillStrategy(e.target.value)}>
-                  <Radio value="mean">均值</Radio>
-                  <Radio value="median">中位数</Radio>
-                  <Radio value="custom">指定值</Radio>
-                </Radio.Group>
-                {fillStrategy === 'custom' && <InputNumber value={fillValue} onChange={(v) => setFillValue(v ?? 0)} />}
-              </Space>}
-              <Alert type="info" message={`含缺失值的行: ${missingRowCount}`} />
-              <Button type="primary" onClick={handleMissingValues} disabled={missingMethod === 'mark'}>预览变更</Button>
-            </Space>
-          ),
-        },
-        {
-          key: 'outliers', label: '异常值',
-          children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Alert type="info" message="使用 IQR 方法 (Q1 ± 1.5×IQR) 检测异常值。异常值将被标记为缺失。" />
-              <Button type="primary" onClick={handleOutliers}>检测并标记异常值</Button>
-              {outlierCount > 0 && <Alert type="warning" message={`检测到 ${outlierCount} 个异常值，已在预览表格中高亮并标记为缺失。`} />}
-            </Space>
-          ),
-        },
-        {
-          key: 'columns', label: '列操作',
-          children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Space>
-                <span>重命名列:</span>
-                {dataset.columns.slice(0, 5).map((col) => (
-                  <Input key={col.name} size="small" style={{ width: 120 }} defaultValue={col.name}
-                    onBlur={(e) => renameColumn(col.name, e.target.value)} />
-                ))}
-              </Space>
-            </Space>
-          ),
-        },
-      ]} />
+    <div style={{ padding: '4px 0 24px' }}>
+      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>数据清洗</Title>
 
-      <div style={{ marginTop: 16 }}>
-        <Title level={5}>数据预览</Title>
+      <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 20, background: 'rgba(255,255,255,0.4)' }}>
+        <Tabs
+          items={[
+            {
+              key: 'missing', label: '缺失值',
+              children: (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Space>
+                    <span>适用列:</span>
+                    <Select mode="multiple" style={{ minWidth: 200 }} value={missingTargetCols} onChange={setMissingTargetCols}
+                      options={[
+                        { label: '全部数值列', value: '__all_numeric__' },
+                        ...dataset.columns.map((c) => ({ label: c.name, value: c.name })),
+                      ]} />
+                  </Space>
+                  <Radio.Group value={missingMethod} onChange={(e) => setMissingMethod(e.target.value)}>
+                    <Radio value="delete">删除含缺失值的行</Radio>
+                    <Radio value="fill">填充缺失值</Radio>
+                    <Radio value="mark">仅标记，不处理</Radio>
+                  </Radio.Group>
+                  {missingMethod === 'fill' && <Space>
+                    <Radio.Group value={fillStrategy} onChange={(e) => setFillStrategy(e.target.value)}>
+                      <Radio value="mean">均值</Radio>
+                      <Radio value="median">中位数</Radio>
+                      <Radio value="custom">指定值</Radio>
+                    </Radio.Group>
+                    {fillStrategy === 'custom' && <InputNumber value={fillValue} onChange={(v) => setFillValue(v ?? 0)} />}
+                  </Space>}
+                  <Alert type="info" message={`含缺失值的行: ${missingRowCount}`} style={{ background: 'rgba(91,127,149,0.06)', border: 'none' }} />
+                  <Button type="primary" onClick={handleMissingValues} disabled={missingMethod === 'mark'}>预览变更</Button>
+                </Space>
+              ),
+            },
+            {
+              key: 'outliers', label: '异常值',
+              children: (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Alert type="info" message="使用 IQR 方法 (Q1 ± 1.5×IQR) 检测异常值。异常值将被标记为缺失。" style={{ background: 'rgba(201,169,110,0.08)', border: 'none' }} />
+                  <Button type="primary" onClick={handleOutliers}>检测并标记异常值</Button>
+                  {outlierCount > 0 && <Alert type="warning" message={`检测到 ${outlierCount} 个异常值，已在预览表格中高亮并标记为缺失。`} />}
+                </Space>
+              ),
+            },
+            {
+              key: 'columns', label: '列操作',
+              children: (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Space>
+                    <span>重命名列:</span>
+                    {dataset.columns.slice(0, 5).map((col) => (
+                      <Input key={col.name} size="small" style={{ width: 130 }} defaultValue={col.name}
+                        onBlur={(e) => renameColumn(col.name, e.target.value)} />
+                    ))}
+                  </Space>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 14 }}>数据预览</Text>
         <DataTable dataset={dataset} maxRows={10} highlightCells={outlierHighlights.length > 0 ? outlierHighlights : undefined} />
       </div>
 
-      {hasChanges && <div style={{ marginTop: 16 }}>
-        <Space>
+      {hasChanges && (
+        <div style={{ display: 'flex', gap: 12 }}>
           <Button onClick={resetChanges}>重置</Button>
           <Button type="primary" onClick={applyChanges}>应用更改</Button>
-        </Space>
-      </div>}
+        </div>
+      )}
     </div>
   );
 }

@@ -10,8 +10,26 @@ interface EmptyStateProps {
 export default function EmptyState({ description, actionText, actionPath }: EmptyStateProps) {
   const navigate = useNavigate();
   return (
-    <Empty description={description} style={{ padding: 80 }}>
-      {actionText && actionPath && <Button type="primary" onClick={() => navigate(actionPath)}>{actionText}</Button>}
-    </Empty>
+    <div
+      className="glass-card"
+      style={{
+        padding: 48,
+        textAlign: 'center',
+        background: 'rgba(255,255,255,0.4)',
+      }}
+    >
+      <Empty
+        description={
+          <span style={{ color: '#888', fontSize: 14 }}>{description}</span>
+        }
+        style={{ margin: 0 }}
+      >
+        {actionText && actionPath && (
+          <Button type="primary" onClick={() => navigate(actionPath)}>
+            {actionText}
+          </Button>
+        )}
+      </Empty>
+    </div>
   );
 }

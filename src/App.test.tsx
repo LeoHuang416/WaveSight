@@ -33,7 +33,8 @@ describe('App Layout', () => {
   });
   it('shows app title', () => {
     render(<Wrapper><AppLayout /></Wrapper>);
-    expect(screen.getByText('📊 实验数据分析工作台')).toBeDefined();
+    expect(screen.getByText('实验数据分析工作台')).toBeDefined();
+    expect(screen.getByText('数据工作台')).toBeDefined();
   });
 });
 

@@ -73,76 +73,102 @@ export default function ImportPage() {
     dataIndex: col.name, key: col.name, ellipsis: true,
     render: (val: unknown) => {
       if (val === null || val === undefined || val === '')
-        return <span style={{ color: '#ff4d4f', background: '#fff1f0', padding: '0 4px' }}>—</span>;
+        return <span style={{ color: '#c47878', background: '#fff1f0', padding: '0 6px', borderRadius: 4 }}>—</span>;
       return String(val);
     },
   })) ?? [];
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
-      <Title level={4}>数据导入</Title>
-      <Steps current={step} items={[
-        { title: '选择文件' }, { title: '预览与清洗' }, { title: '确认导入' },
-      ]} style={{ marginBottom: 24 }} />
+    <div style={{ padding: '4px 0 24px' }}>
+      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>数据导入</Title>
 
-      {sizeWarning && <Alert type="warning" message={sizeWarning} showIcon style={{ marginBottom: 16 }} closable onClose={() => setSizeWarning(null)} />}
+      <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 20, background: 'rgba(255,255,255,0.4)' }}>
+        <Steps
+          current={step}
+          items={[{ title: '选择文件' }, { title: '预览与清洗' }, { title: '确认导入' }]}
+          style={{ marginBottom: 24 }}
+        />
 
-      {importProgress && (
-        <div style={{ marginBottom: 16 }}>
-          <Progress percent={importProgress.total > 0 ? Math.round((importProgress.loaded / importProgress.total) * 100) : 0}
-            status="active" format={() => {
-              const labels = { reading: '读取中...', parsing: '解析中...', saving: '保存中...' };
-              return labels[importProgress.phase];
-            }} />
-        </div>
-      )}
-      {step === 0 && (
-        <Dragger accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm,.json" showUploadList={false}
-          beforeUpload={(f) => { handleFile(f as File); return false; }} disabled={loading}>
-          <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-          <p className="ant-upload-text">拖拽文件到此处，或点击选择</p>
-          <p className="ant-upload-hint">支持 CSV, TSV, Excel (.xlsx/.xls), JSON, TXT</p>
-        </Dragger>
-      )}
-      {step === 1 && preview && (<>
-        <Space style={{ marginBottom: 16 }} wrap>
-          <span>第一行作为列名:</span><Switch checked={hasHeader} onChange={setHasHeader} />
-          <span>跳过前</span><InputNumber min={0} max={50} value={skipRows} onChange={(v) => setSkipRows(v ?? 0)} /><span>行</span>
-          <span>分隔符:</span>
-          <Radio.Group value={delimiter} onChange={(e) => setDelimiter(e.target.value)}>
-            <Radio.Button value=",">逗号</Radio.Button>
-            <Radio.Button value="tsv">制表符</Radio.Button>
-            <Radio.Button value="semicolon">分号</Radio.Button>
-          </Radio.Group>
-          <Text type="secondary">编码: {preview.encoding}</Text>
-        </Space>
-        <Table columns={previewColumns}
-          dataSource={preview.rows.map((row, i) => ({ ...row, _key: i }))}
-          rowKey="_key" scroll={{ x: 'max-content', y: 400 }} size="small" bordered pagination={false}
-          style={{ marginBottom: 16 }} />
-        <Text type="secondary">
-          预览前 {preview.rows.length} 行 · 共 {preview.totalRows} 行 · {preview.columns.length} 列
-          （点击列头可切换 🔢数值 / 🔤分类 类型）
-        </Text>
-        <div style={{ marginTop: 16 }}><Space>
-          <Button onClick={() => { setStep(0); setFile(null); setPreview(null); }}>← 重新选择</Button>
-          <Button type="primary" onClick={() => setStep(2)}>下一步 →</Button>
-        </Space></div>
-      </>)}
-      {step === 2 && preview && (<>
-        <Descriptions bordered column={2} style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="文件名">{file?.name}</Descriptions.Item>
-          <Descriptions.Item label="编码">{preview.encoding}</Descriptions.Item>
-          <Descriptions.Item label="列数">{columnTypes.length}（{columnTypes.filter((c) => c.type === 'numeric').length} 数值, {columnTypes.filter((c) => c.type === 'categorical').length} 分类）</Descriptions.Item>
-          <Descriptions.Item label="行数">{preview.totalRows}</Descriptions.Item>
-          <Descriptions.Item label="第一行为列名">{hasHeader ? '是' : '否'}</Descriptions.Item>
-          <Descriptions.Item label="跳过行数">{skipRows}</Descriptions.Item>
-        </Descriptions>
-        <Space>
-          <Button onClick={() => setStep(1)}>← 返回修改</Button>
-          <Button type="primary" loading={loading} onClick={handleConfirm}>确认导入</Button>
-        </Space>
-      </>)}
+        {sizeWarning && (
+          <Alert type="warning" message={sizeWarning} showIcon style={{ marginBottom: 16 }} closable onClose={() => setSizeWarning(null)} />
+        )}
+
+        {importProgress && (
+          <div style={{ marginBottom: 16 }}>
+            <Progress
+              percent={importProgress.total > 0 ? Math.round((importProgress.loaded / importProgress.total) * 100) : 0}
+              status="active"
+              format={() => {
+                const labels: Record<string, string> = { reading: '读取中...', parsing: '解析中...', saving: '保存中...' };
+                return labels[importProgress.phase] ?? '';
+              }}
+            />
+          </div>
+        )}
+
+        {step === 0 && (
+          <Dragger
+            accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm,.json"
+            showUploadList={false}
+            beforeUpload={(f) => { handleFile(f as File); return false; }}
+            disabled={loading}
+          >
+            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p className="ant-upload-text">拖拽文件到此处，或点击选择</p>
+            <p className="ant-upload-hint">支持 CSV, TSV, Excel (.xlsx/.xls), JSON, TXT</p>
+          </Dragger>
+        )}
+
+        {step === 1 && preview && (
+          <>
+            <Space style={{ marginBottom: 16 }} wrap>
+              <span>第一行作为列名:</span><Switch checked={hasHeader} onChange={setHasHeader} />
+              <span>跳过前</span><InputNumber min={0} max={50} value={skipRows} onChange={(v) => setSkipRows(v ?? 0)} /><span>行</span>
+              <span>分隔符:</span>
+              <Radio.Group value={delimiter} onChange={(e) => setDelimiter(e.target.value)}>
+                <Radio.Button value=",">逗号</Radio.Button>
+                <Radio.Button value="tsv">制表符</Radio.Button>
+                <Radio.Button value="semicolon">分号</Radio.Button>
+              </Radio.Group>
+              <Text type="secondary">编码: {preview.encoding}</Text>
+            </Space>
+            <Table
+              columns={previewColumns}
+              dataSource={preview.rows.map((row, i) => ({ ...row, _key: i }))}
+              rowKey="_key" scroll={{ x: 'max-content', y: 400 }} size="small"
+              pagination={false} style={{ marginBottom: 12 }}
+            />
+            <Text type="secondary">
+              预览前 {preview.rows.length} 行 · 共 {preview.totalRows} 行 · {preview.columns.length} 列
+            </Text>
+            <div style={{ marginTop: 16 }}>
+              <Space>
+                <Button onClick={() => { setStep(0); setFile(null); setPreview(null); }}>← 重新选择</Button>
+                <Button type="primary" onClick={() => setStep(2)}>下一步 →</Button>
+              </Space>
+            </div>
+          </>
+        )}
+
+        {step === 2 && preview && (
+          <>
+            <Descriptions bordered column={2} style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="文件名">{file?.name}</Descriptions.Item>
+              <Descriptions.Item label="编码">{preview.encoding}</Descriptions.Item>
+              <Descriptions.Item label="列数">
+                {columnTypes.length}（{columnTypes.filter((c) => c.type === 'numeric').length} 数值, {columnTypes.filter((c) => c.type === 'categorical').length} 分类）
+              </Descriptions.Item>
+              <Descriptions.Item label="行数">{preview.totalRows}</Descriptions.Item>
+              <Descriptions.Item label="第一行为列名">{hasHeader ? '是' : '否'}</Descriptions.Item>
+              <Descriptions.Item label="跳过行数">{skipRows}</Descriptions.Item>
+            </Descriptions>
+            <Space>
+              <Button onClick={() => setStep(1)}>← 返回修改</Button>
+              <Button type="primary" loading={loading} onClick={handleConfirm}>确认导入</Button>
+            </Space>
+          </>
+        )}
+      </div>
     </div>
   );
 }

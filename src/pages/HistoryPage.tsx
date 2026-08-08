@@ -47,21 +47,22 @@ export default function HistoryPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Title level={4}>历史记录</Title>
+      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>历史记录</Title>
       <div style={{ display: 'flex', gap: 16 }}>
-        <div style={{ width: 320, flexShrink: 0 }}>
+        {/* Left sidebar – history list */}
+        <div className="glass-card" style={{ width: 320, flexShrink: 0, padding: 16, overflow: 'hidden' }}>
           <Space direction="vertical" style={{ width: '100%' }}>
             <Search placeholder="搜索..." onSearch={setSearch} allowClear />
             <Select mode="multiple" placeholder="筛选分析类型" style={{ width: '100%' }} value={typeFilter} onChange={setTypeFilter}
               options={Object.entries(TYPE_LABELS).map(([k, v]) => ({ label: v, value: k }))} allowClear />
           </Space>
-          <div style={{ marginTop: 16, maxHeight: 'calc(100vh - 250px)', overflow: 'auto' }}>
+          <div style={{ marginTop: 16, maxHeight: 'calc(100vh - 290px)', overflow: 'auto' }}>
             {filtered.length === 0 ? <Empty description="暂无记录" /> :
               Array.from(grouped.entries()).map(([day, items]) => (
                 <div key={day} style={{ marginBottom: 8 }}>
                   <Text strong style={{ fontSize: 12, color: '#999' }}>{day}</Text>
                   {items.map((r) => (
-                    <Card key={r.id} size="small" hoverable
+                    <Card key={r.id} size="small" hoverable className="glass-card"
                       style={{ marginTop: 4, background: selectedId === r.id ? '#e6f4ff' : undefined }}
                       onClick={() => setSelected(r.id)}>
                       <Space size={4}>
@@ -76,10 +77,12 @@ export default function HistoryPage() {
           </div>
         </div>
 
-        <div style={{ flex: 1 }}>
+        {/* Right panel – detail view */}
+        <div className="glass-card" style={{ flex: 1, padding: 16, overflow: 'auto' }}>
           {selected ? (
             <Card title={<Space>{TYPE_LABELS[selected.analysisConfig.type!]}<Tag>{new Date(selected.createdAt).toLocaleString('zh-CN')}</Tag></Space>}
-              extra={<Space><Popconfirm title="删除?" onConfirm={() => removeRecord(selected.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space>}>
+              extra={<Space><Popconfirm title="删除?" onConfirm={() => removeRecord(selected.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space>}
+              style={{ border: 'none', background: 'transparent' }}>
               <Descriptions size="small" column={2} bordered style={{ marginBottom: 12 }}>
                 <Descriptions.Item label="数据集">{selected.datasetName}</Descriptions.Item>
                 {selected.analysisConfig.valueCols && <Descriptions.Item label="变量">{selected.analysisConfig.valueCols.join(', ')}</Descriptions.Item>}

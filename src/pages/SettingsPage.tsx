@@ -39,31 +39,31 @@ export default function SettingsPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 640 }}>
-      <Title level={4}>设置</Title>
+      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>设置</Title>
       <Space direction="vertical" style={{ width: '100%' }} size={16}>
 
-        <Card title="分析默认值" size="small">
+        <Card title="分析默认值" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical">
             <Space><Text>显著性水平 α</Text><InputNumber min={0.001} max={0.1} step={0.01} value={alpha} onChange={(v) => setAlpha(v ?? 0.05)} /></Space>
             <Space><Text>有效数字位数</Text><Select value={significantDigits} onChange={setSignificantDigits} style={{ width: 80 }} options={[2, 3, 4, 5, 6].map((n) => ({ label: String(n), value: n }))} /></Space>
           </Space>
         </Card>
 
-        <Card title="图表默认值" size="small">
+        <Card title="图表默认值" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical">
             <Space><Text>默认配色</Text><Radio.Group value={defaultColorScheme} onChange={(e) => setDefaultColorScheme(e.target.value)}><Radio value="grayscale">学术灰度</Radio><Radio value="color">彩色</Radio></Radio.Group></Space>
             <Space><Text>导出格式</Text><Select value={defaultExportFormat} onChange={setDefaultExportFormat} style={{ width: 100 }} options={[{ label: 'SVG', value: 'svg' }, { label: 'PNG', value: 'png' }, { label: 'CSV', value: 'csv' }]} /></Space>
           </Space>
         </Card>
 
-        <Card title="历史记录" size="small">
+        <Card title="历史记录" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical">
             <Space><Text>自动清理</Text><Switch checked={autoCleanHistory} onChange={setAutoCleanHistory} /></Space>
             {autoCleanHistory && <Space><Text>保留天数</Text><InputNumber min={7} max={365} value={historyRetentionDays} onChange={(v) => setHistoryRetentionDays(v ?? 90)} /></Space>}
           </Space>
         </Card>
 
-        <Card title="数据管理" size="small">
+        <Card title="数据管理" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space style={{ width: '100%' }} direction="vertical">
             <Space>
               <Statistic title="数据集" value={stats.datasetCount} />
@@ -77,7 +77,7 @@ export default function SettingsPage() {
           </Space>
         </Card>
 
-        <Card title="关于" size="small">
+        <Card title="关于" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px', background: 'rgba(255,255,255,0.25)' }}>
           <Text>实验数据分析工作台 v1.0</Text><br />
           <Text type="secondary">本地运行，数据仅在当前电脑浏览器存储。无需联网。</Text>
         </Card>

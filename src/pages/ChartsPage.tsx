@@ -90,10 +90,12 @@ export default function ChartsPage() {
       <div style={{ padding: 24, display: 'flex', gap: 16 }}>
         <div style={{ flex: 1 }}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => setViewMode('gallery')}>← 返回画廊</Button>
-          <div style={{ marginTop: 8 }}><ReactECharts ref={(e) => setEchartsRef(e as ReactECharts)} option={chart.echartsOption} style={{ height: 400, background: '#fff' }} notMerge /></div>
+          <div className="glass-card" style={{ marginTop: 8, padding: 16, background: 'rgba(255,255,255,0.4)' }}>
+            <ReactECharts ref={(e) => setEchartsRef(e as ReactECharts)} option={chart.echartsOption} style={{ height: 400, background: '#fff' }} notMerge />
+          </div>
         </div>
         <div style={{ width: 220 }}>
-          <Card size="small" title="编辑图表">
+          <Card className="glass-card" size="small" title="编辑图表" bodyStyle={{ padding: '16px' }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <Input addonBefore="标题" value={chart.title} onChange={(e) => addChart({ ...chart, title: e.target.value, echartsOption: { ...chart.echartsOption as Record<string, unknown>, title: { text: e.target.value, left: 'center' } } })} />
               <Select value={chart.chartType} style={{ width: '100%' }} onChange={(v: ChartType) => addChart({ ...chart, chartType: v, echartsOption: simpleOption(currentDataset, v, chart.title, chart.colorScheme) })} options={Object.entries(CHART_LABELS).map(([k, v]) => ({ label: v, value: k }))} />
@@ -112,17 +114,19 @@ export default function ChartsPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Title level={4}>实验图表</Title>
+      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>实验图表</Title>
       <Space style={{ marginBottom: 16 }}><Search placeholder="搜索图表..." onSearch={setSearch} style={{ width: 200 }} /><Select value={typeFilter} onChange={setTypeFilter} style={{ width: 120 }} options={[{ label: '全部', value: 'all' }, ...Object.entries(CHART_LABELS).map(([k, v]) => ({ label: v, value: k }))]} /><Button type="primary" icon={<PlusOutlined />} onClick={handleNew}>新建图表</Button></Space>
-      {filtered.length === 0 ? <Empty description={charts.length === 0 ? '暂无图表，分析数据后保存图表或点击"新建图表"' : '无匹配结果'} /> :
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
-          {filtered.map((c) => (
-            <Card key={c.id} hoverable size="small" onClick={() => setEditingChart(c.id)}
-              cover={<div style={{ height: 140, overflow: 'hidden' }}><ReactECharts option={c.echartsOption} style={{ height: 140 }} notMerge /></div>}>
-              <Card.Meta title={c.title} description={<><Tag>{CHART_LABELS[c.chartType]}</Tag><Text type="secondary" style={{ fontSize: 11 }}>{new Date(c.createdAt).toLocaleString('zh-CN')}</Text></>} />
-            </Card>
-          ))}
-        </div>}
+      <div className="glass-card" style={{ padding: '24px 28px', background: 'rgba(255,255,255,0.4)' }}>
+        {filtered.length === 0 ? <Empty description={charts.length === 0 ? '暂无图表，分析数据后保存图表或点击"新建图表"' : '无匹配结果'} /> :
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+            {filtered.map((c) => (
+              <Card key={c.id} className="glass-card" hoverable size="small" bodyStyle={{ padding: '16px' }} onClick={() => setEditingChart(c.id)}
+                cover={<div style={{ height: 140, overflow: 'hidden' }}><ReactECharts option={c.echartsOption} style={{ height: 140 }} notMerge /></div>}>
+                <Card.Meta title={c.title} description={<><Tag>{CHART_LABELS[c.chartType]}</Tag><Text type="secondary" style={{ fontSize: 11 }}>{new Date(c.createdAt).toLocaleString('zh-CN')}</Text></>} />
+              </Card>
+            ))}
+          </div>}
+      </div>
     </div>
   );
 }

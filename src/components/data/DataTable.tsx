@@ -13,25 +13,27 @@ export default function DataTable({ dataset, highlightCells, maxRows }: DataTabl
 
   const columns: ColumnsType<Record<string, unknown>> = dataset.columns.map((col) => ({
     title: (
-      <span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         {col.name}
-        <span style={{ marginLeft: 4, fontSize: 12 }}>
-          {col.type === 'numeric' ? '🔢' : '🔤'}
+        <span style={{ fontSize: 10, opacity: 0.5 }}>
+          {col.type === 'numeric' ? '#' : 'Aa'}
         </span>
       </span>
     ),
     dataIndex: col.name,
     key: col.name,
     ellipsis: true,
-    width: 120,
+    width: 130,
     render: (val: unknown, _record: Record<string, unknown>, idx: number) => {
       const highlight = highlightCells?.find((h) => h.row === idx && h.col === col.name);
       const isMissing = val === null || val === undefined || val === '';
       return (
         <span style={{
-          color: highlight?.color ?? (isMissing ? '#ff4d4f' : undefined),
+          color: highlight?.color ?? (isMissing ? '#c47878' : undefined),
           background: highlight ? `${highlight.color}20` : isMissing ? '#fff1f0' : undefined,
-          padding: '0 4px', borderRadius: 2,
+          padding: '1px 6px',
+          borderRadius: 4,
+          fontSize: 13,
         }}>
           {isMissing ? '—' : String(val)}
         </span>
@@ -40,9 +42,22 @@ export default function DataTable({ dataset, highlightCells, maxRows }: DataTabl
   }));
 
   return (
-    <Table columns={columns}
-      dataSource={rows.map((row, i) => ({ ...row, _key: i }))}
-      rowKey="_key" size="small" bordered
-      scroll={{ x: 'max-content', y: 400 }} pagination={false} />
+    <div style={{
+      background: 'rgba(255,255,255,0.4)',
+      borderRadius: 12,
+      border: '1px solid rgba(255,255,255,0.8)',
+      overflow: 'hidden',
+    }}>
+      <Table
+        columns={columns}
+        dataSource={rows.map((row, i) => ({ ...row, _key: i }))}
+        rowKey="_key"
+        size="small"
+        bordered={false}
+        scroll={{ x: 'max-content', y: 400 }}
+        pagination={false}
+        style={{ background: 'transparent' }}
+      />
+    </div>
   );
 }

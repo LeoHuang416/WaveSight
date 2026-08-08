@@ -179,86 +179,96 @@ export default function AnalysisPage() {
   };
 
   if (!currentDataset) {
-    return <div style={{ padding: 24 }}><Title level={4}>实验数据分析</Title><Empty description="请先导入数据" /></div>;
+    return (
+      <div style={{ padding: 24 }}>
+        <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>实验数据分析</Title>
+        <div className="glass-card" style={{ padding: '24px 28px', background: 'rgba(255,255,255,0.4)' }}>
+          <Empty description="请先导入数据" />
+        </div>
+      </div>
+    );
   }
 
   const groups = [...new Set(ANALYSES.map((a) => a.group))];
 
   return (
     <div style={{ padding: 24 }}>
-      <Title level={4}>实验数据分析</Title>
-      <div style={{ display: 'flex', gap: 16 }}>
-        {/* Left: analysis menu */}
-        <div style={{ width: 180, flexShrink: 0 }}>
-          <Collapse defaultActiveKey={groups} items={groups.map((g) => ({
-            key: g, label: g,
-            children: <Space direction="vertical" style={{ width: '100%' }}>
-              {ANALYSES.filter((a) => a.group === g).map((a) => (
-                <Button key={a.key} type={analysisType === a.key ? 'primary' : 'default'} block size="small"
-                  onClick={() => { setAnalysisType(a.key); setResults(null); setValueCols([]); setGroupCol(undefined); setXCols([]); setYCol(undefined); setFactorCols([]); setResponseCol(undefined); }}>
-                  {a.label}
-                </Button>
-              ))}
-            </Space>,
-          }))} />
-        </div>
+      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>实验数据分析</Title>
 
-        {/* Center: variable config + results */}
-        <div style={{ flex: 1 }}>
-          {activeAnalysis && (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Space wrap>
-                {activeAnalysis.needs.valueCols && renderSlot('变量', activeAnalysis.needs.valueCols, valueCols, (v) => setValueCols(Array.isArray(v) ? v : v ? [v] : []), numericCols)}
-                {activeAnalysis.needs.groupCol && renderSlot('分组列', 'single', groupCol, (v) => setGroupCol(v as string | undefined), catCols)}
-                {activeAnalysis.needs.xCols && renderSlot('自变量 X', activeAnalysis.needs.xCols, xCols, (v) => setXCols(Array.isArray(v) ? v : v ? [v] : []), numericCols)}
-                {activeAnalysis.needs.yCol && renderSlot('因变量 Y', 'single', yCol, (v) => setYCol(v as string | undefined), numericCols)}
-                {activeAnalysis.needs.factorCols && renderSlot('因素列(2-3个)', 'multi', factorCols, (v) => setFactorCols(Array.isArray(v) ? v : []), numericCols)}
-                {activeAnalysis.needs.responseCol && renderSlot('响应列', 'single', responseCol, (v) => setResponseCol(v as string | undefined), numericCols)}
-                {activeAnalysis.needs.paired && (<>
-                  {renderSlot('配对列1', 'single', pairedCol1, (v) => setPairedCol1(v as string | undefined), numericCols)}
-                  {renderSlot('配对列2', 'single', pairedCol2, (v) => setPairedCol2(v as string | undefined), numericCols)}
-                </>)}
-                {activeAnalysis.needs.method && <Space><Text>方法:</Text><Select style={{ width: 120 }} value={corrMethod} onChange={setCorrMethod} options={[{ label: 'Pearson', value: 'pearson' }, { label: 'Spearman', value: 'spearman' }, { label: 'Kendall', value: 'kendall' }]} /></Space>}
-                {activeAnalysis.needs.model && <Space><Text>模型:</Text><Select style={{ width: 120 }} value={modelName} onChange={setModelName} options={[{ label: '指数', value: 'exp' }, { label: '幂函数', value: 'power' }, { label: 'Gaussian', value: 'gauss' }, { label: '线性', value: 'linear' }]} /></Space>}
+      <div className="glass-card" style={{ padding: '24px 28px', background: 'rgba(255,255,255,0.4)' }}>
+        <div style={{ display: 'flex', gap: 16 }}>
+          {/* Left: analysis menu */}
+          <div style={{ width: 180, flexShrink: 0 }}>
+            <Collapse defaultActiveKey={groups} items={groups.map((g) => ({
+              key: g, label: g,
+              children: <Space direction="vertical" style={{ width: '100%' }}>
+                {ANALYSES.filter((a) => a.group === g).map((a) => (
+                  <Button key={a.key} type={analysisType === a.key ? 'primary' : 'default'} block size="small"
+                    onClick={() => { setAnalysisType(a.key); setResults(null); setValueCols([]); setGroupCol(undefined); setXCols([]); setYCol(undefined); setFactorCols([]); setResponseCol(undefined); }}>
+                    {a.label}
+                  </Button>
+                ))}
+              </Space>,
+            }))} />
+          </div>
+
+          {/* Center: variable config + results */}
+          <div style={{ flex: 1 }}>
+            {activeAnalysis && (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Space wrap>
+                  {activeAnalysis.needs.valueCols && renderSlot('变量', activeAnalysis.needs.valueCols, valueCols, (v) => setValueCols(Array.isArray(v) ? v : v ? [v] : []), numericCols)}
+                  {activeAnalysis.needs.groupCol && renderSlot('分组列', 'single', groupCol, (v) => setGroupCol(v as string | undefined), catCols)}
+                  {activeAnalysis.needs.xCols && renderSlot('自变量 X', activeAnalysis.needs.xCols, xCols, (v) => setXCols(Array.isArray(v) ? v : v ? [v] : []), numericCols)}
+                  {activeAnalysis.needs.yCol && renderSlot('因变量 Y', 'single', yCol, (v) => setYCol(v as string | undefined), numericCols)}
+                  {activeAnalysis.needs.factorCols && renderSlot('因素列(2-3个)', 'multi', factorCols, (v) => setFactorCols(Array.isArray(v) ? v : []), numericCols)}
+                  {activeAnalysis.needs.responseCol && renderSlot('响应列', 'single', responseCol, (v) => setResponseCol(v as string | undefined), numericCols)}
+                  {activeAnalysis.needs.paired && (<>
+                    {renderSlot('配对列1', 'single', pairedCol1, (v) => setPairedCol1(v as string | undefined), numericCols)}
+                    {renderSlot('配对列2', 'single', pairedCol2, (v) => setPairedCol2(v as string | undefined), numericCols)}
+                  </>)}
+                  {activeAnalysis.needs.method && <Space><Text>方法:</Text><Select style={{ width: 120 }} value={corrMethod} onChange={setCorrMethod} options={[{ label: 'Pearson', value: 'pearson' }, { label: 'Spearman', value: 'spearman' }, { label: 'Kendall', value: 'kendall' }]} /></Space>}
+                  {activeAnalysis.needs.model && <Space><Text>模型:</Text><Select style={{ width: 120 }} value={modelName} onChange={setModelName} options={[{ label: '指数', value: 'exp' }, { label: '幂函数', value: 'power' }, { label: 'Gaussian', value: 'gauss' }, { label: '线性', value: 'linear' }]} /></Space>}
+                </Space>
+                <Button type="primary" icon={<PlayCircleOutlined />} loading={running} onClick={run}>运行分析</Button>
               </Space>
-              <Button type="primary" icon={<PlayCircleOutlined />} loading={running} onClick={run}>运行分析</Button>
-            </Space>
-          )}
+            )}
 
-          {results && (
-            <div style={{ marginTop: 24 }}>
-              {results.tables.map((t, i) => (
-                <div key={i} style={{ marginBottom: 16 }}>
-                  <Text strong>{t.title}</Text>
-                  <Table columns={t.headers.map((h) => ({ title: h, dataIndex: h, key: h }))}
-                    dataSource={t.rows.map((row, ri) => {
-                      const obj: Record<string, unknown> = { _key: ri };
-                      t.headers.forEach((h, hi) => { obj[h] = typeof row[hi] === 'number' ? formatNumber(row[hi] as number, digits) : row[hi]; });
-                      return obj;
-                    })}
-                    rowKey="_key" size="small" bordered pagination={false} scroll={{ x: 'max-content' }} />
-                </div>
-              ))}
-              {results.conclusion && <Alert type="success" message={results.conclusion} style={{ marginBottom: 16 }} />}
-              {results.chartData?.map((cd, i) => (
-                <Button key={i} icon={<SaveOutlined />} onClick={() => saveChartToModule(cd)} style={{ marginRight: 8 }}>
-                  保存图表: {cd.title}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
+            {results && (
+              <div style={{ marginTop: 24 }}>
+                {results.tables.map((t, i) => (
+                  <div key={i} style={{ marginBottom: 16 }}>
+                    <Text strong>{t.title}</Text>
+                    <Table columns={t.headers.map((h) => ({ title: h, dataIndex: h, key: h }))}
+                      dataSource={t.rows.map((row, ri) => {
+                        const obj: Record<string, unknown> = { _key: ri };
+                        t.headers.forEach((h, hi) => { obj[h] = typeof row[hi] === 'number' ? formatNumber(row[hi] as number, digits) : row[hi]; });
+                        return obj;
+                      })}
+                      rowKey="_key" size="small" bordered pagination={false} scroll={{ x: 'max-content' }} />
+                  </div>
+                ))}
+                {results.conclusion && <Alert type="success" message={results.conclusion} style={{ marginBottom: 16 }} />}
+                {results.chartData?.map((cd, i) => (
+                  <Button key={i} icon={<SaveOutlined />} onClick={() => saveChartToModule(cd)} style={{ marginRight: 8 }}>
+                    保存图表: {cd.title}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Right: action */}
-        <div style={{ width: 120, flexShrink: 0 }}>
-          <Descriptions column={1} size="small" bordered>
-            <Descriptions.Item label="α">{alpha}</Descriptions.Item>
-          </Descriptions>
+          {/* Right: action */}
+          <div style={{ width: 120, flexShrink: 0 }}>
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="α">{alpha}</Descriptions.Item>
+            </Descriptions>
+          </div>
         </div>
       </div>
 
       {/* Available columns bar */}
-      <div style={{ marginTop: 16, padding: '8px 12px', background: '#f5f5f5', borderRadius: 4 }}>
+      <div className="glass-card" style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,255,255,0.25)', borderRadius: 4 }}>
         <Text type="secondary">可用列: </Text>
         {numericCols.map((c) => <Button key={c} size="small" type="text" onClick={() => {
           if (valueCols.includes(c)) setValueCols(valueCols.filter((v) => v !== c));
