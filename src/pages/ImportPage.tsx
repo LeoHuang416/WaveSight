@@ -30,6 +30,96 @@ export default function ImportPage() {
   const [editValue, setEditValue] = useState('');
   const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
 
+  // Cell selection for copy/cut
+  const [selectedCell, setSelectedCell] = useState<{ row: number; col: string } | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<{ row: number; col: string } | null>(null);
+
+  const colNames = useMemo(() => preview?.columns.map((c) => c.name) ?? [], [preview]);
+
+  /** Get normalized range from selection */
+  const getSelectedRange = useCallback(() => {
+    if (!selectedCell || !preview) return null;
+    const end = selectionEnd ?? selectedCell;
+    const allCols = colNames;
+    const c1 = allCols.indexOf(selectedCell.col);
+    const c2 = allCols.indexOf(end.col);
+    if (c1 === -1 || c2 === -1) return null;
+    const minRow = Math.min(selectedCell.row, end.row);
+    const maxRow = Math.max(selectedCell.row, end.row);
+    const minCol = Math.min(c1, c2);
+    const maxCol = Math.max(c1, c2);
+    return { minRow, maxRow, minCol, maxCol, cols: allCols.slice(minCol, maxCol + 1) };
+  }, [selectedCell, selectionEnd, preview, colNames]);
+
+  /** Check if a cell is in the selected range */
+  const isCellSelected = useCallback((row: number, col: string) => {
+    const range = getSelectedRange();
+    if (!range) return false;
+    const ci = colNames.indexOf(col);
+    return row >= range.minRow && row <= range.maxRow && ci >= range.minCol && ci <= range.maxCol;
+  }, [getSelectedRange, colNames]);
+
+  const handleCellClick = useCallback((row: number, col: string, e: React.MouseEvent) => {
+    if (e.shiftKey && selectedCell) {
+      setSelectionEnd({ row, col });
+    } else {
+      setSelectedCell({ row, col });
+      setSelectionEnd(null);
+    }
+  }, [selectedCell]);
+
+  const handleCellDblClick = useCallback((row: number, col: string, currentVal: unknown) => {
+    setEditingCell({ row, col });
+    setEditValue(currentVal === null || currentVal === undefined || currentVal === '' ? '' : String(currentVal));
+  }, []);
+
+  // Ctrl+C: copy selected range to clipboard
+  const handleCopy = useCallback((e: React.ClipboardEvent) => {
+    const range = getSelectedRange();
+    if (!range) return;
+    e.preventDefault();
+    const rows = editableRows.slice(range.minRow, range.maxRow + 1);
+    const tsv = rows.map((row) =>
+      range.cols.map((c) => {
+        const v = row[c];
+        return v === null || v === undefined || v === '' ? '' : String(v);
+      }).join('\t')
+    ).join('\n');
+    navigator.clipboard.writeText(tsv).catch(() => {});
+    message.info(`已复制 ${range.maxRow - range.minRow + 1} 行 × ${range.cols.length} 列`);
+  }, [getSelectedRange, editableRows]);
+
+  // Ctrl+X: cut selected range
+  const handleCut = useCallback((e: React.ClipboardEvent) => {
+    const range = getSelectedRange();
+    if (!range) return;
+    e.preventDefault();
+    const rows = editableRows.slice(range.minRow, range.maxRow + 1);
+    const tsv = rows.map((row) =>
+      range.cols.map((c) => {
+        const v = row[c];
+        return v === null || v === undefined || v === '' ? '' : String(v);
+      }).join('\t')
+    ).join('\n');
+    navigator.clipboard.writeText(tsv).catch(() => {});
+    // Clear selected cells
+    setEditableRows((prev) => {
+      const next = [...prev];
+      for (let r = range.minRow; r <= range.maxRow && r < next.length; r++) {
+        const rowData = { ...next[r] };
+        for (const c of range.cols) rowData[c] = null;
+        next[r] = rowData;
+      }
+      return next;
+    });
+    message.info(`已剪切 ${range.maxRow - range.minRow + 1} 行 × ${range.cols.length} 列`);
+  }, [getSelectedRange, editableRows]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.ctrlKey && e.key === 'c') handleCopy(e as unknown as React.ClipboardEvent);
+    if (e.ctrlKey && e.key === 'x') handleCut(e as unknown as React.ClipboardEvent);
+  }, [handleCopy, handleCut]);
+
   const handleFile = useCallback(async (f: File) => {
     setFile(f); setLoading(true); setSizeWarning(null);
     try {
@@ -222,6 +312,7 @@ export default function ImportPage() {
           render: (val: unknown, _record: Record<string, unknown>, idx: number) => {
             const isEditing = editingCell?.row === idx && editingCell?.col === col.name;
             const isDeleted = deletedRows.has(idx);
+            const isSelected = isCellSelected(idx, col.name);
             if (isDeleted) {
               return (
                 <span style={{ color: '#ccc', textDecoration: 'line-through', cursor: 'pointer', fontSize: 13 }}
@@ -247,18 +338,21 @@ export default function ImportPage() {
             const isMissing = val === null || val === undefined || val === '';
             return (
               <span
-                onClick={() => startEdit(idx, col.name, val)}
+                onClick={(e) => handleCellClick(idx, col.name, e)}
+                onDoubleClick={() => handleCellDblClick(idx, col.name, val)}
                 style={{
-                  cursor: 'text',
+                  cursor: 'cell',
                   color: isMissing ? '#c47878' : undefined,
-                  background: isMissing ? '#fff1f0' : undefined,
+                  background: isSelected ? 'rgba(37,99,235,0.15)' : (isMissing ? '#fff1f0' : undefined),
+                  outline: isSelected ? '1px solid rgba(37,99,235,0.4)' : undefined,
                   padding: '1px 6px',
                   borderRadius: 3,
                   fontSize: 13,
                   display: 'inline-block',
                   minWidth: 30,
+                  userSelect: 'none',
                 }}
-                title="点击编辑"
+                title="单击选择 · 双击编辑 · Ctrl+C/X 复制剪切"
               >
                 {display}
               </span>
@@ -352,7 +446,7 @@ export default function ImportPage() {
               </Radio.Group>
               <Text type="secondary">编码: {preview.encoding}</Text>
             </Space>
-            <div onPaste={handlePaste}>
+            <div onPaste={handlePaste} onKeyDown={handleKeyDown} tabIndex={0} style={{ outline: 'none' }}>
               <Table
                 columns={previewColumns}
                 dataSource={editableRows.map((row, i) => ({ ...row, _key: i }))}
@@ -361,7 +455,7 @@ export default function ImportPage() {
               />
             </div>
             <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 8 }}>
-              点击单元格编辑 · 列头 ← → 调整列顺序 · 从 Excel 复制后在此粘贴 (Ctrl+V)
+              单击选择 · 双击编辑 · Shift+点击扩选 · Ctrl+C 复制 · Ctrl+X 剪切 · Ctrl+V 粘贴 · 列头 ← → 调整列序
             </Text>
             <Text type="secondary">
               预览前 {preview.rows.length} 行
