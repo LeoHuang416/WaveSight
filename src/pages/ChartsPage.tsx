@@ -335,21 +335,24 @@ function simpleOption(
         if (!changed) break;
       }
 
-      // Build flat [x, y, z] triplets, row-major: Y outer loop, X inner (X changes first)
-      const surfData: number[][] = [];
+      // Build structured 2D grid: rows = y, cols = x. Each inner cell is [x, y, z].
+      // echarts-gl detects the row×col structure and builds a proper mesh — no triangulation.
+      const surfGrid: number[][][] = [];
       let gridZMin = Infinity, gridZMax = -Infinity;
       for (let yi = 0; yi < gridSize; yi++) {
+        const row: number[][] = [];
         const yVal = yMin + yi * yStep;
         for (let xi = 0; xi < gridSize; xi++) {
           const zVal = zGrid[yi][xi];
-          if (isNaN(zVal)) continue;
-          const xVal = xMin + xi * xStep;
-          surfData.push([xVal, yVal, zVal]);
-          if (zVal < gridZMin) gridZMin = zVal;
-          if (zVal > gridZMax) gridZMax = zVal;
+          if (!isNaN(zVal)) {
+            if (zVal < gridZMin) gridZMin = zVal;
+            if (zVal > gridZMax) gridZMax = zVal;
+          }
+          row.push([xMin + xi * xStep, yVal, isNaN(zVal) ? 0 : zVal]);
         }
+        surfGrid.push(row);
       }
-      if (surfData.length < 9) return { ...base, series: [{ type: 'bar', data: [] }] };
+      if (gridZMin === Infinity) { gridZMin = 0; gridZMax = 1; }
 
       const clipMin = gridZMin + (gridZMax - gridZMin) * 0.02;
       const clipMax = gridZMax - (gridZMax - gridZMin) * 0.02;
@@ -389,7 +392,7 @@ function simpleOption(
         },
         series: [{
           type: 'surface',
-          data: surfData,
+          data: surfGrid,
           shading: 'realistic',
           realisticMaterial: { roughness: 0.3, metalness: 0.05 },
           itemStyle: { opacity: 0.95 },
