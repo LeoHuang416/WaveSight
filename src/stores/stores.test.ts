@@ -43,6 +43,12 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().kimiFontSize).toBe('standard');
     expect(useSettingsStore.getState().kimiDataAlign).toBe('auto');
   });
+  it('has edge defaults', () => {
+    expect(useSettingsStore.getState().edgeSidebarMode).toBe('always');
+    expect(useSettingsStore.getState().edgePanelDefault).toBe('expanded');
+    expect(useSettingsStore.getState().edgeTabPosition).toBe('top');
+    expect(useSettingsStore.getState().edgeCompactMode).toBe(false);
+  });
   it('supports csv as export format', () => {
     expect(useSettingsStore.getState().defaultExportFormat).toBe('svg');
     useSettingsStore.getState().setDefaultExportFormat('csv');

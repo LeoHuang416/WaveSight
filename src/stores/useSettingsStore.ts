@@ -7,6 +7,9 @@ export type AppearanceMode = 'light' | 'dark';
 export type RowHeight = 'compact' | 'standard' | 'relaxed';
 export type FontSize = 'small' | 'standard' | 'large';
 export type DataAlign = 'auto' | 'left' | 'decimal';
+export type EdgeSidebarMode = 'always' | 'auto' | 'hidden';
+export type EdgePanelDefault = 'expanded' | 'collapsed';
+export type EdgeTabPosition = 'top' | 'left';
 
 export const ROW_HEIGHT_MAP: Record<RowHeight, number> = { compact: 40, standard: 48, relaxed: 56 };
 export const FONT_SIZE_MAP: Record<FontSize, number> = { small: 12, standard: 14, large: 16 };
@@ -17,6 +20,10 @@ interface SettingsState {
   kimiRowHeight: RowHeight;
   kimiFontSize: FontSize;
   kimiDataAlign: DataAlign;
+  edgeSidebarMode: EdgeSidebarMode;
+  edgePanelDefault: EdgePanelDefault;
+  edgeTabPosition: EdgeTabPosition;
+  edgeCompactMode: boolean;
   alpha: number;
   significantDigits: number;
   defaultColorScheme: ColorScheme;
@@ -28,6 +35,10 @@ interface SettingsState {
   setKimiRowHeight: (v: RowHeight) => void;
   setKimiFontSize: (v: FontSize) => void;
   setKimiDataAlign: (v: DataAlign) => void;
+  setEdgeSidebarMode: (v: EdgeSidebarMode) => void;
+  setEdgePanelDefault: (v: EdgePanelDefault) => void;
+  setEdgeTabPosition: (v: EdgeTabPosition) => void;
+  setEdgeCompactMode: (v: boolean) => void;
   setAlpha: (v: number) => void;
   setSignificantDigits: (v: number) => void;
   setDefaultColorScheme: (v: ColorScheme) => void;
@@ -44,6 +55,10 @@ export const useSettingsStore = create<SettingsState>()(
       kimiRowHeight: 'standard' as RowHeight,
       kimiFontSize: 'standard' as FontSize,
       kimiDataAlign: 'auto' as DataAlign,
+      edgeSidebarMode: 'always' as EdgeSidebarMode,
+      edgePanelDefault: 'expanded' as EdgePanelDefault,
+      edgeTabPosition: 'top' as EdgeTabPosition,
+      edgeCompactMode: false,
       alpha: 0.05,
       significantDigits: 3,
       defaultColorScheme: 'grayscale',
@@ -55,6 +70,10 @@ export const useSettingsStore = create<SettingsState>()(
       setKimiRowHeight: (kimiRowHeight) => set({ kimiRowHeight }),
       setKimiFontSize: (kimiFontSize) => set({ kimiFontSize }),
       setKimiDataAlign: (kimiDataAlign) => set({ kimiDataAlign }),
+      setEdgeSidebarMode: (edgeSidebarMode) => set({ edgeSidebarMode }),
+      setEdgePanelDefault: (edgePanelDefault) => set({ edgePanelDefault }),
+      setEdgeTabPosition: (edgeTabPosition) => set({ edgeTabPosition }),
+      setEdgeCompactMode: (edgeCompactMode) => set({ edgeCompactMode }),
       setAlpha: (alpha) => set({ alpha }),
       setSignificantDigits: (significantDigits) => set({ significantDigits }),
       setDefaultColorScheme: (defaultColorScheme) => set({ defaultColorScheme }),

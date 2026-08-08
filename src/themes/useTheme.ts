@@ -14,6 +14,8 @@ export function useTheme() {
   const kimiRowHeight = useSettingsStore((s) => s.kimiRowHeight);
   const kimiFontSize = useSettingsStore((s) => s.kimiFontSize);
   const kimiDataAlign = useSettingsStore((s) => s.kimiDataAlign);
+  const edgeSidebarMode = useSettingsStore((s) => s.edgeSidebarMode);
+  const edgeCompactMode = useSettingsStore((s) => s.edgeCompactMode);
 
   useEffect(() => {
     const t = getTheme(uiTheme);
@@ -24,6 +26,9 @@ export function useTheme() {
     // data attributes for CSS selectors
     root.setAttribute('data-theme', uiTheme);
     root.setAttribute('data-mode', appearanceMode);
+    root.setAttribute('data-edge-sidebar', edgeSidebarMode);
+    if (edgeCompactMode) root.setAttribute('data-edge-compact', '');
+    else root.removeAttribute('data-edge-compact');
 
     // Colors
     root.style.setProperty('--color-accent', colors.accent);
@@ -77,6 +82,7 @@ export function useTheme() {
     // Layout dimensions
     root.style.setProperty('--sidebar-width', `${t.sidebarWidth}px`);
     root.style.setProperty('--sidebar-collapsed-width', `${t.sidebarCollapsedWidth}px`);
+    root.style.setProperty('--topbar-height', `${t.topbarHeight}px`);
 
     // Fonts
     root.style.setProperty('--font-mono', t.fontMono);

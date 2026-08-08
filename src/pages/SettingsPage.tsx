@@ -5,20 +5,23 @@ import { useSettingsStore } from '@/stores/useSettingsStore';
 import { getStorageStats, exportAllData, clearAllData } from '@/db/operations';
 import { exportAllDataJSON } from '@/utils/export';
 import { THEMES, getTheme } from '@/themes';
-import type { AppearanceMode, RowHeight, FontSize, DataAlign } from '@/stores/useSettingsStore';
+import type { AppearanceMode, RowHeight, FontSize, DataAlign, EdgeSidebarMode, EdgePanelDefault, EdgeTabPosition } from '@/stores/useSettingsStore';
 
 const { Title, Text } = Typography;
 
 export default function SettingsPage() {
   const {
     uiTheme, appearanceMode, kimiRowHeight, kimiFontSize, kimiDataAlign,
+    edgeSidebarMode, edgePanelDefault, edgeTabPosition, edgeCompactMode,
     alpha, significantDigits, defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
     setUiTheme, setAppearanceMode, setKimiRowHeight, setKimiFontSize, setKimiDataAlign,
+    setEdgeSidebarMode, setEdgePanelDefault, setEdgeTabPosition, setEdgeCompactMode,
     setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays,
   } = useSettingsStore();
 
   const [stats, setStats] = useState({ datasetCount: 0, chartCount: 0, historyCount: 0 });
   const isKimi = uiTheme === 'kimi-minimal';
+  const isEdge = uiTheme === 'edge-modern';
 
   useEffect(() => { getStorageStats().then(setStats); }, []);
 
@@ -74,6 +77,41 @@ export default function SettingsPage() {
                 unCheckedChildren="☀️"
               />
             </Space>
+
+            {isEdge && (
+              <>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0', paddingTop: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Edge Modern 子选项</Text>
+                </div>
+                <Space>
+                  <Text style={{ width: 80, display: 'inline-block' }}>侧边栏</Text>
+                  <Radio.Group value={edgeSidebarMode} onChange={(e) => setEdgeSidebarMode(e.target.value as EdgeSidebarMode)}>
+                    <Radio.Button value="always">常驻</Radio.Button>
+                    <Radio.Button value="auto">自动收起</Radio.Button>
+                    <Radio.Button value="hidden">完全隐藏</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space>
+                  <Text style={{ width: 80, display: 'inline-block' }}>右侧面板</Text>
+                  <Radio.Group value={edgePanelDefault} onChange={(e) => setEdgePanelDefault(e.target.value as EdgePanelDefault)}>
+                    <Radio.Button value="expanded">默认展开</Radio.Button>
+                    <Radio.Button value="collapsed">默认收起</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space>
+                  <Text style={{ width: 80, display: 'inline-block' }}>标签页位置</Text>
+                  <Radio.Group value={edgeTabPosition} onChange={(e) => setEdgeTabPosition(e.target.value as EdgeTabPosition)}>
+                    <Radio.Button value="top">顶部</Radio.Button>
+                    <Radio.Button value="left">左侧垂直</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space>
+                  <Text style={{ width: 80, display: 'inline-block' }}>紧凑模式</Text>
+                  <Switch checked={edgeCompactMode} onChange={setEdgeCompactMode} />
+                  <Text type="secondary" style={{ fontSize: 12 }}>间距减少 30%，适合小屏幕</Text>
+                </Space>
+              </>
+            )}
 
             {isKimi && (
               <>

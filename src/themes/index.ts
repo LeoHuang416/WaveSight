@@ -26,6 +26,7 @@ export interface ThemeDefinition {
   /* Layout */
   sidebarWidth: number;
   sidebarCollapsedWidth: number;
+  topbarHeight: number;
   buttonRadius: number;
 
   /* Feature flags */
@@ -72,6 +73,7 @@ const macosGlass: ThemeDefinition = {
 
   sidebarWidth: 240,
   sidebarCollapsedWidth: 64,
+  topbarHeight: 56,
   buttonRadius: 12,
 
   hasGlass: true,
@@ -116,6 +118,7 @@ const kimiMinimal: ThemeDefinition = {
 
   sidebarWidth: 200,
   sidebarCollapsedWidth: 56,
+  topbarHeight: 56,
   buttonRadius: 8,
 
   hasGlass: false,
@@ -127,8 +130,53 @@ const kimiMinimal: ThemeDefinition = {
   antFontSize: 14,
 };
 
+/* ────── Theme 3: Edge Modern ────── */
+const edgeModern: ThemeDefinition = {
+  id: 'edge-modern',
+  label: 'Edge Modern',
+  description: '多面板生产力布局 — 清晰区域分割、Acrylic 导航、微软 Edge 风格',
+
+  light: {
+    bg: '#f8f9fa',
+    bgSecondary: '#ffffff',
+    textPrimary: '#202124',
+    textSecondary: '#5f6368',
+    textTertiary: '#80868b',
+    border: '#dadce0',
+    borderLight: '#e8eaed',
+    accent: '#0078d4',
+    accentHover: '#106ebe',
+    accentLight: 'rgba(0,120,212,0.08)',
+  },
+  dark: {
+    bg: '#171717',
+    bgSecondary: '#202124',
+    textPrimary: '#e8eaed',
+    textSecondary: '#9aa0a6',
+    textTertiary: '#80868b',
+    border: '#3c4043',
+    borderLight: '#2d2e31',
+    accent: '#4dabf7',
+    accentHover: '#74bffa',
+    accentLight: 'rgba(77,171,247,0.12)',
+  },
+
+  sidebarWidth: 200,
+  sidebarCollapsedWidth: 56,
+  topbarHeight: 48,
+  buttonRadius: 8,
+
+  hasGlass: false,
+  hasCardShadow: false,
+  hasCardRadius: true,
+
+  fontMono: "'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Consolas', monospace",
+  fontSans: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif",
+  antFontSize: 14,
+};
+
 /* ─── Theme Registry ─── */
-export const THEMES: ThemeDefinition[] = [macosGlass, kimiMinimal];
+export const THEMES: ThemeDefinition[] = [macosGlass, kimiMinimal, edgeModern];
 
 export const DEFAULT_THEME_ID = 'macos-glass';
 

@@ -13,11 +13,12 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const t = getTheme(uiTheme);
+  const th = t.topbarHeight;
 
   return (
     <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
       <TopBar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
-      <Layout style={{ background: 'transparent', marginTop: 56 }}>
+      <Layout style={{ background: 'transparent', marginTop: th }}>
         <Sider
           id="app-sidebar"
           width={t.sidebarWidth}
@@ -28,10 +29,10 @@ export default function AppLayout() {
           style={{
             background: 'transparent',
             border: 'none',
-            height: 'calc(100vh - 56px)',
+            height: `calc(100vh - ${th}px)`,
             position: 'fixed',
             left: 0,
-            top: 56,
+            top: th,
             zIndex: 100,
           }}
         >
@@ -42,7 +43,7 @@ export default function AppLayout() {
             marginLeft: collapsed ? t.sidebarCollapsedWidth : t.sidebarWidth,
             transition: 'margin-left 0.2s ease-in-out',
             background: 'transparent',
-            minHeight: 'calc(100vh - 56px - 32px)',
+            minHeight: `calc(100vh - ${th}px - 32px)`,
           }}
         >
           <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 24px 0' }}>

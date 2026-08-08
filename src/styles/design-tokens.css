@@ -492,3 +492,183 @@ body {
 [data-theme="kimi-minimal"] #app-footer {
   border-top: 1px solid var(--border-thin) !important;
 }
+
+/* ============================================================
+   Edge Modern Overrides
+   ============================================================ */
+
+/* Glass cards → elevated surface cards with subtle border */
+[data-theme="edge-modern"] .glass-card {
+  background: var(--bg-secondary);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-thin);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+[data-theme="edge-modern"] .glass-card:hover {
+  background: var(--bg-secondary);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* TopBar — acrylic */
+[data-theme="edge-modern"] #app-topbar {
+  background: var(--bg-secondary) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: 1px solid var(--border-thin) !important;
+}
+
+/* Sidebar — white surface, 3px accent indicator */
+[data-theme="edge-modern"] #app-sidebar {
+  background: var(--bg-secondary) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-right: 1px solid var(--border-thin) !important;
+}
+
+/* Sidebar — group labels */
+[data-theme="edge-modern"] .ant-menu-item-group-title {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-tertiary) !important;
+  padding-left: 16px !important;
+}
+
+/* Menu — 3px left accent indicator for selected */
+[data-theme="edge-modern"] .ant-menu-item {
+  border-radius: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  padding-left: 16px !important;
+}
+[data-theme="edge-modern"] .ant-menu-item:hover {
+  background: var(--color-accent-light) !important;
+}
+[data-theme="edge-modern"] .ant-menu-item-selected {
+  background: var(--color-accent-light) !important;
+  color: var(--color-accent) !important;
+  border-left: 3px solid var(--color-accent) !important;
+}
+
+/* Buttons — edge style */
+[data-theme="edge-modern"] .ant-btn {
+  font-weight: 500 !important;
+}
+[data-theme="edge-modern"] .ant-btn-primary {
+  background: var(--color-accent) !important;
+  border-color: var(--color-accent) !important;
+  box-shadow: none !important;
+}
+[data-theme="edge-modern"] .ant-btn-primary:hover {
+  filter: brightness(1.08);
+}
+[data-theme="edge-modern"] .ant-btn-default {
+  border: 1px solid var(--border-thin) !important;
+  background: var(--bg-secondary) !important;
+  box-shadow: none !important;
+}
+[data-theme="edge-modern"] .ant-btn-default:hover {
+  border-color: var(--color-accent) !important;
+  color: var(--color-accent) !important;
+}
+[data-theme="edge-modern"] .ant-btn-text {
+  color: var(--color-text-secondary) !important;
+}
+[data-theme="edge-modern"] .ant-btn-text:hover {
+  color: var(--color-accent) !important;
+  text-decoration: underline;
+}
+
+/* Cards */
+[data-theme="edge-modern"] .ant-card {
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border-thin) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+  background: var(--bg-secondary) !important;
+}
+
+/* Inputs */
+[data-theme="edge-modern"] .ant-input,
+[data-theme="edge-modern"] .ant-input-number,
+[data-theme="edge-modern"] .ant-select-selector,
+[data-theme="edge-modern"] .ant-picker {
+  border-radius: var(--radius-sm) !important;
+  border: 1px solid var(--border-thin) !important;
+  background: var(--bg-secondary) !important;
+}
+[data-theme="edge-modern"] .ant-input:focus,
+[data-theme="edge-modern"] .ant-input-number:focus,
+[data-theme="edge-modern"] .ant-select-selector:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-light) !important;
+}
+
+/* Table */
+[data-theme="edge-modern"] .ant-table {
+  border-radius: var(--radius-md) !important;
+}
+[data-theme="edge-modern"] .ant-table-thead > tr > th {
+  background: var(--bg-app) !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+  color: #5f6368 !important;
+  border-bottom: 1px solid var(--border-thin) !important;
+}
+[data-theme="edge-modern"] .ant-table-tbody > tr > td {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border-light, #e8eaed) !important;
+}
+[data-theme="edge-modern"] .ant-table-tbody > tr:hover > td {
+  background: var(--bg-app) !important;
+}
+[data-theme="edge-modern"] .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: var(--color-accent-light) !important;
+  color: var(--color-accent) !important;
+}
+
+/* Upload */
+[data-theme="edge-modern"] .ant-upload-drag {
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-secondary) !important;
+  border: 2px dashed var(--border-thin) !important;
+}
+[data-theme="edge-modern"] .ant-upload-drag:hover {
+  border-color: var(--color-accent) !important;
+  background: var(--bg-app) !important;
+}
+
+/* Alert */
+[data-theme="edge-modern"] .ant-alert {
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--border-thin) !important;
+}
+
+/* Tag */
+[data-theme="edge-modern"] .ant-tag {
+  border-radius: 4px !important;
+}
+
+/* Collapse */
+[data-theme="edge-modern"] .ant-collapse {
+  border: 1px solid var(--border-thin) !important;
+  border-radius: var(--radius-md) !important;
+  background: var(--bg-secondary) !important;
+}
+
+/* Statistic */
+[data-theme="edge-modern"] .ant-statistic-content {
+  font-family: var(--font-sans) !important;
+  font-weight: 600;
+}
+
+/* Compact mode */
+[data-theme="edge-modern"][data-edge-compact] .glass-card { padding: 14px 18px !important; }
+[data-theme="edge-modern"][data-edge-compact] .ant-table-tbody > tr > td { padding: 8px 12px !important; }
+[data-theme="edge-modern"][data-edge-compact] .ant-card-body { padding: 14px 18px !important; }
+
+/* Hidden sidebar */
+[data-theme="edge-modern"][data-edge-sidebar="hidden"] .ant-layout-sider { display: none !important; }
+[data-theme="edge-modern"][data-edge-sidebar="hidden"] .ant-layout-content { margin-left: 0 !important; }
