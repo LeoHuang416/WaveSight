@@ -86,10 +86,15 @@ describe('useDataStore', () => {
     expect(useDataStore.getState().getNumericColumns()).toHaveLength(1);
     expect(useDataStore.getState().getCategoricalColumns()).toHaveLength(1);
   });
+  it('refreshes dataset list to empty after db clear', async () => {
+    await useDataStore.getState().refreshDatasetList();
+    const list = useDataStore.getState().datasetList;
+    expect(list).toHaveLength(0);
+  });
 });
 
 describe('useHistoryStore', () => {
-  beforeEach(async () => { await db.history.clear(); });
+  beforeEach(async () => { await db.history.clear(); useHistoryStore.getState().refresh(); });
   it('starts empty', () => {
     expect(useHistoryStore.getState().records).toHaveLength(0);
   });
@@ -100,5 +105,16 @@ describe('useHistoryStore', () => {
       datasetName: 'test', relatedChartIds: [], note: '', createdAt: Date.now(),
     });
     expect(useHistoryStore.getState().records).toHaveLength(1);
+  });
+  it('clears records from view after clearAllData + refresh', async () => {
+    await useHistoryStore.getState().addRecord({
+      id: 'hr-clr', analysisConfig: { type: 'descriptive', datasetId: 'd1' },
+      result: { id: 'r2', config: { type: 'descriptive', datasetId: 'd1' }, tables: [], conclusion: 'ok', timestamp: Date.now() },
+      datasetName: 'test', relatedChartIds: [], note: '', createdAt: Date.now(),
+    });
+    expect(useHistoryStore.getState().records).toHaveLength(1);
+    await db.history.clear();
+    await useHistoryStore.getState().refresh();
+    expect(useHistoryStore.getState().records).toHaveLength(0);
   });
 });

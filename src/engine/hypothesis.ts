@@ -1,7 +1,10 @@
 import { mean, std, variance, extractNumericColumn, extractByGroup, tTestPValue, fTestPValue } from './utils';
 import type { ResultTable } from '@/types/analysis';
 
-export function runIndependentTTest(rows: Record<string, unknown>[], valueCol: string, groupCol: string): {
+function pStars(p: number, alpha: number): string { return p < 0.001 ? '***' : p < 0.01 ? '**' : p < alpha ? '*' : ''; }
+function pText(p: number, alpha: number): string { return p < 0.001 ? 'p < 0.001' : p < 0.01 ? 'p < 0.01' : p < alpha ? `p < ${alpha}` : `p = ${p.toFixed(3)}`; }
+
+export function runIndependentTTest(rows: Record<string, unknown>[], valueCol: string, groupCol: string, alpha = 0.05): {
   table: ResultTable; conclusion: string;
 } {
   const groups = extractByGroup(rows, valueCol, groupCol);
@@ -21,14 +24,14 @@ export function runIndependentTTest(rows: Record<string, unknown>[], valueCol: s
   const p = tTestPValue(Math.abs(t), df);
   const pooledSD = Math.sqrt(((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2));
   const cohensD = Math.abs(m1 - m2) / pooledSD;
-  const pText = p < 0.001 ? 'p < 0.001' : `p = ${p.toFixed(3)}`;
+  const stars = pStars(p, alpha);
   return {
     table: { title: '独立样本 t 检验', headers: ['组别', 'N', '均值', '标准差'], rows: [[names[0], n1, m1, Math.sqrt(v1)], [names[1], n2, m2, Math.sqrt(v2)]] },
-    conclusion: `t = ${t.toFixed(4)}, ${pText}, Cohen's d = ${cohensD.toFixed(3)}。两组${p < 0.05 ? '存在显著差异' : '无显著差异'}${p < 0.05 ? ' (p < 0.05)' : ''}。`,
+    conclusion: `t = ${t.toFixed(4)}, ${pText(p, alpha)}${stars ? ` ${stars}` : ''}, Cohen's d = ${cohensD.toFixed(3)}。两组${p < alpha ? '存在显著差异' : '无显著差异'}${p < alpha ? ` (p < ${alpha})` : ''}。`,
   };
 }
 
-export function runPairedTTest(rows: Record<string, unknown>[], col1: string, col2: string): {
+export function runPairedTTest(rows: Record<string, unknown>[], col1: string, col2: string, alpha = 0.05): {
   table: ResultTable; conclusion: string;
 } {
   const merged = rows.map((r) => ({ a: Number(r[col1]), b: Number(r[col2]) })).filter((v) => !isNaN(v.a) && !isNaN(v.b));
@@ -37,14 +40,14 @@ export function runPairedTTest(rows: Record<string, unknown>[], col1: string, co
   const mDiff = mean(diffs), sdDiff = std(diffs);
   const t = mDiff / (sdDiff / Math.sqrt(n));
   const p = tTestPValue(Math.abs(t), n - 1);
-  const pText = p < 0.001 ? 'p < 0.001' : `p = ${p.toFixed(3)}`;
+  const stars = pStars(p, alpha);
   return {
     table: { title: '配对 t 检验', headers: ['', 'N', '均值', '标准差', '差值均值'], rows: [[col1, n, mean(merged.map((v) => v.a)), std(merged.map((v) => v.a)), mDiff], [col2, n, mean(merged.map((v) => v.b)), std(merged.map((v) => v.b)), '']] },
-    conclusion: `配对 t 检验: t(${n - 1}) = ${t.toFixed(4)}, ${pText}。${col1} 与 ${col2} ${p < 0.05 ? '存在显著差异' : '无显著差异'}。`,
+    conclusion: `配对 t 检验: t(${n - 1}) = ${t.toFixed(4)}, ${pText(p, alpha)}${stars ? ` ${stars}` : ''}。${col1} 与 ${col2} ${p < alpha ? '存在显著差异' : '无显著差异'}。`,
   };
 }
 
-export function runOneWayANOVA(rows: Record<string, unknown>[], valueCol: string, groupCol: string): {
+export function runOneWayANOVA(rows: Record<string, unknown>[], valueCol: string, groupCol: string, alpha = 0.05): {
   table: ResultTable; conclusion: string;
 } {
   const groups = extractByGroup(rows, valueCol, groupCol);
@@ -60,14 +63,14 @@ export function runOneWayANOVA(rows: Record<string, unknown>[], valueCol: string
   const dfw = N - k, msw = ssw / dfw;
   const f = msb / msw;
   const p = fTestPValue(f, dfb, dfw);
-  const pText = p < 0.001 ? 'p < 0.001' : `p = ${p.toFixed(3)}`;
+  const stars = pStars(p, alpha);
   return {
     table: { title: '单因素 ANOVA', headers: ['来源', 'SS', 'df', 'MS', 'F', 'p'], rows: [['组间', ssb, dfb, msb, f, p], ['组内', ssw, dfw, msw, '', ''], ['总计', ssb + ssw, N - 1, '', '', '']] },
-    conclusion: `单因素 ANOVA: F(${dfb}, ${dfw}) = ${f.toFixed(4)}, ${pText}。${p < 0.05 ? '组间存在显著差异' : '组间无显著差异'}。`,
+    conclusion: `单因素 ANOVA: F(${dfb}, ${dfw}) = ${f.toFixed(4)}, ${pText(p, alpha)}${stars ? ` ${stars}` : ''}。${p < alpha ? '组间存在显著差异' : '组间无显著差异'}。`,
   };
 }
 
-export function runTukeyHSD(rows: Record<string, unknown>[], valueCol: string, groupCol: string): ResultTable {
+export function runTukeyHSD(rows: Record<string, unknown>[], valueCol: string, groupCol: string, alpha = 0.05): ResultTable {
   const groups = extractByGroup(rows, valueCol, groupCol);
   const names = Array.from(groups.keys());
   const N = names.reduce((s, g) => s + groups.get(g)!.length, 0), k = names.length;
@@ -83,7 +86,7 @@ export function runTukeyHSD(rows: Record<string, unknown>[], valueCol: string, g
       const se = Math.sqrt(msw * (1 / v1.length + 1 / v2.length));
       const q = Math.abs(diff) / se;
       const pAdj = Math.min(1, tTestPValue(q, N - k) * (k * (k - 1)) / 2);
-      resultRows.push([`${names[i]} vs ${names[j]}`, diff, se, q, pAdj, pAdj < 0.05 ? '*' : pAdj < 0.01 ? '**' : '']);
+      resultRows.push([`${names[i]} vs ${names[j]}`, diff, se, q, pAdj, pStars(pAdj, alpha)]);
     }
   }
   return { title: 'Tukey HSD 事后检验', headers, rows: resultRows };

@@ -6,8 +6,9 @@ export function formatNumber(value: number, significantDigits: number = 3): stri
 
 export function formatPValue(p: number, alpha: number = 0.05): string {
   if (p < 0.001) return 'p < 0.001 ***';
-  const stars = p < 0.01 ? ' **' : p < alpha ? ' *' : '';
-  return `p = ${formatNumber(p, 3)}${stars}`;
+  if (p < 0.01) return `p < 0.01 **`;
+  if (p < alpha) return `p < ${alpha} *`;
+  return `p = ${formatNumber(p, 3)}`;
 }
 
 export function generateId(): string {

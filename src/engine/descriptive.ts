@@ -72,18 +72,18 @@ function shapiroWilk(values: number[]): { w: number; p: number } {
   return { w, p: Math.min(1, Math.max(0, 1 - normalCDF(z))) };
 }
 
-export function runNormality(rows: Record<string, unknown>[], cols: string[]): {
+export function runNormality(rows: Record<string, unknown>[], cols: string[], alpha = 0.05): {
   table: ResultTable;
   qqData: Record<string, { theoretical: number[]; sample: number[] }>;
 } {
-  const headers = ['变量', 'N', 'Shapiro-Wilk W', 'p 值', '是否正态(p>0.05)'];
+  const headers = ['变量', 'N', 'Shapiro-Wilk W', 'p 值', `是否正态(p>${alpha})`];
   const resultRows: (string | number)[][] = [];
   const qqData: Record<string, { theoretical: number[]; sample: number[] }> = {};
   for (const col of cols) {
     const values = extractNumericColumn(rows, col);
     if (values.length < 3) continue;
     const { w, p } = shapiroWilk(values);
-    resultRows.push([col, values.length, w, p, p > 0.05 ? '是' : '否']);
+    resultRows.push([col, values.length, w, p, p > alpha ? '是' : '否']);
     const sorted = [...values].sort((a, b) => a - b);
     const n = sorted.length;
     qqData[col] = {

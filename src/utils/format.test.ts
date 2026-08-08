@@ -28,6 +28,25 @@ describe('formatPValue', () => {
     const s = formatPValue(0.07);
     expect(s).not.toContain('*');
   });
+  it('uses correct star hierarchy (*** before ** before *)', () => {
+    // 0.0005 < 0.001 → ***
+    expect(formatPValue(0.0005)).toContain('***');
+    // 0.005 < 0.01 → ** (two stars only, note: '**' ⊂ '***' so check 'p < 0.01 **')
+    expect(formatPValue(0.005)).toContain('p < 0.01 **');
+    // 0.03 < 0.05 → * (one star, default alpha=0.05)
+    expect(formatPValue(0.03)).toContain('p < 0.05 *');
+    expect(formatPValue(0.03)).not.toContain('**');
+  });
+  it('respects custom alpha threshold for single star', () => {
+    // alpha=0.01: 0.03 >= 0.01 → no stars
+    expect(formatPValue(0.03, 0.01)).not.toContain('*');
+    // alpha=0.01: 0.008 < 0.01 → single star
+    expect(formatPValue(0.008, 0.01)).toContain('*');
+    // alpha=0.01: 0.008 is NOT < 0.001 so no ***
+    expect(formatPValue(0.008, 0.01)).not.toContain('***');
+    // alpha=0.01: 0.008 IS < 0.01 so **
+    expect(formatPValue(0.008, 0.01)).toContain('**');
+  });
 });
 
 describe('generateId', () => {

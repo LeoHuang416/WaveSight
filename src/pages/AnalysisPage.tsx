@@ -82,7 +82,7 @@ export default function AnalysisPage() {
           break;
         }
         case 'normality': {
-          const r = runNormality(rows, valueCols.length ? valueCols : numericCols);
+          const r = runNormality(rows, valueCols.length ? valueCols : numericCols, alpha);
           result = { tables: [r.table], conclusion: '', chartData: Object.entries(r.qqData).map(([col, d]) => ({ chartType: 'qq', title: `Q-Q 图: ${col}`, data: d })) };
           break;
         }
@@ -91,22 +91,22 @@ export default function AnalysisPage() {
           break;
         case 'ttest-independent': {
           if (valueCols[0] && groupCol) {
-            const r = runIndependentTTest(rows, valueCols[0], groupCol);
+            const r = runIndependentTTest(rows, valueCols[0], groupCol, alpha);
             result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'boxplot', title: `${valueCols[0]} 按 ${groupCol}`, data: { valueCol: valueCols[0], groupCol } }] };
           }
           break;
         }
         case 'ttest-paired': {
           if (pairedCol1 && pairedCol2) {
-            const r = runPairedTTest(rows, pairedCol1, pairedCol2);
+            const r = runPairedTTest(rows, pairedCol1, pairedCol2, alpha);
             result = { tables: [r.table], conclusion: r.conclusion };
           }
           break;
         }
         case 'anova-oneway': {
           if (valueCols[0] && groupCol) {
-            const r = runOneWayANOVA(rows, valueCols[0], groupCol);
-            const tukey = runTukeyHSD(rows, valueCols[0], groupCol);
+            const r = runOneWayANOVA(rows, valueCols[0], groupCol, alpha);
+            const tukey = runTukeyHSD(rows, valueCols[0], groupCol, alpha);
             result = { tables: [r.table, tukey], conclusion: r.conclusion, chartData: [{ chartType: 'boxplot', title: `ANOVA: ${valueCols[0]}`, data: { valueCol: valueCols[0], groupCol } }] };
           }
           break;

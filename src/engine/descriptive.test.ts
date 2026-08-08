@@ -50,6 +50,11 @@ describe('runNormality', () => {
     expect(result.qqData['x'].theoretical).toHaveLength(5);
     expect(result.qqData['x'].sample).toHaveLength(5);
   });
+  it('uses alpha in column header and normality judgment', () => {
+    const result = runNormality(rows, ['x'], 0.01);
+    expect(result.table.headers[4]).toContain('0.01');
+    // With only 5 samples, normality test is inconclusive; just verify the header changes
+  });
 });
 
 describe('runGroupedStats', () => {

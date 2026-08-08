@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { Card, InputNumber, Radio, Select, Switch, Button, Space, Typography, message, Modal, Input, Statistic } from 'antd';
 import { ExportOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useDataStore } from '@/stores/useDataStore';
+import { useHistoryStore } from '@/stores/useHistoryStore';
+import { useChartStore } from '@/stores/useChartStore';
 import { getStorageStats, exportAllData, clearAllData } from '@/db/operations';
 import { exportAllDataJSON } from '@/utils/export';
 import { THEMES, ACCENT_PRESETS, getAccentColor } from '@/themes';
@@ -45,7 +48,15 @@ export default function SettingsPage() {
       ),
       onOk: async () => {
         const input = document.getElementById('confirmInput') as HTMLInputElement;
-        if (input?.value === '确认清空') { await clearAllData(); message.success('已清空'); getStorageStats().then(setStats); }
+        if (input?.value === '确认清空') {
+          await clearAllData();
+          useDataStore.getState().setCurrentDataset(null);
+          useDataStore.getState().refreshDatasetList();
+          useChartStore.getState().refresh();
+          useHistoryStore.getState().refresh();
+          message.success('已清空');
+          getStorageStats().then(setStats);
+        }
         else { message.error('输入不匹配'); return Promise.reject(); }
       },
     });
