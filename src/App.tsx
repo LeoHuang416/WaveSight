@@ -9,6 +9,7 @@ import AnalysisPage from '@/pages/AnalysisPage';
 import ChartsPage from '@/pages/ChartsPage';
 import HistoryPage from '@/pages/HistoryPage';
 import SettingsPage from '@/pages/SettingsPage';
+import { useTheme, useAntTheme } from '@/themes/useTheme';
 
 const router = createBrowserRouter([{
   path: '/',
@@ -24,29 +25,17 @@ const router = createBrowserRouter([{
   ],
 }]);
 
-export default function App() {
+function ThemeApp() {
+  useTheme();
+  const antTheme = useAntTheme();
+
   return (
-    <ConfigProvider
-      locale={zhCN}
-      theme={{
-        token: {
-          colorPrimary: '#5B7F95',
-          colorSuccess: '#7BA587',
-          colorWarning: '#C9A96E',
-          colorError: '#C47878',
-          colorInfo: '#5B7F95',
-          borderRadius: 12,
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-          fontSize: 14,
-          colorText: '#333333',
-          colorTextSecondary: '#888888',
-          colorBgContainer: 'rgba(255,255,255,0.65)',
-          colorBorder: 'rgba(0,0,0,0.06)',
-          paddingLG: 24,
-        },
-      }}
-    >
+    <ConfigProvider locale={zhCN} theme={antTheme}>
       <RouterProvider router={router} />
     </ConfigProvider>
   );
+}
+
+export default function App() {
+  return <ThemeApp />;
 }

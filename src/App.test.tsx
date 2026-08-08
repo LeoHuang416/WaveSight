@@ -116,6 +116,7 @@ describe('HistoryPage', () => {
 describe('SettingsPage', () => {
   it('renders all setting cards', () => {
     render(<Wrapper><SettingsPage /></Wrapper>);
+    expect(screen.getByText('界面主题')).toBeDefined();
     expect(screen.getByText('分析默认值')).toBeDefined();
     expect(screen.getByText('图表默认值')).toBeDefined();
     expect(screen.getByText('数据管理')).toBeDefined();

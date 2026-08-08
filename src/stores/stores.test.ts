@@ -22,6 +22,13 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().significantDigits).toBe(4);
     useSettingsStore.getState().setSignificantDigits(3);
   });
+  it('has default theme', () => {
+    expect(useSettingsStore.getState().uiTheme).toBe('macos-glass');
+  });
+  it('switches theme', () => {
+    useSettingsStore.getState().setUiTheme('macos-glass');
+    expect(useSettingsStore.getState().uiTheme).toBe('macos-glass');
+  });
   it('supports csv as export format', () => {
     expect(useSettingsStore.getState().defaultExportFormat).toBe('svg');
     useSettingsStore.getState().setDefaultExportFormat('csv');

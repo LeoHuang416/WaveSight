@@ -4,12 +4,13 @@ import { ExportOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { getStorageStats, exportAllData, clearAllData } from '@/db/operations';
 import { exportAllDataJSON } from '@/utils/export';
+import { THEMES } from '@/themes';
 
 const { Title, Text } = Typography;
 
 export default function SettingsPage() {
-  const { alpha, significantDigits, defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
-    setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays } = useSettingsStore();
+  const { uiTheme, alpha, significantDigits, defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
+    setUiTheme, setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays } = useSettingsStore();
   const [stats, setStats] = useState({ datasetCount: 0, chartCount: 0, historyCount: 0 });
 
   useEffect(() => { getStorageStats().then(setStats); }, []);
@@ -41,6 +42,18 @@ export default function SettingsPage() {
     <div style={{ padding: 24, maxWidth: 640 }}>
       <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>设置</Title>
       <Space direction="vertical" style={{ width: '100%' }} size={16}>
+
+        <Card title="界面主题" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
+          <Select
+            value={uiTheme}
+            onChange={setUiTheme}
+            style={{ width: '100%' }}
+            options={THEMES.map((t) => ({
+              label: `${t.label} — ${t.description}`,
+              value: t.id,
+            }))}
+          />
+        </Card>
 
         <Card title="分析默认值" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical">
