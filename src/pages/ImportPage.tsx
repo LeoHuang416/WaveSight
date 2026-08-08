@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Steps, Button, Upload, Radio, InputNumber, Switch, Table, Tag, message, Space, Typography, Descriptions, Progress, Alert, Input, Popconfirm } from 'antd';
-import { InboxOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { InboxOutlined, DeleteOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { parseFile, loadFullFile, validateFileSize, type ImportProgress } from '@/utils/fileParser';
 import { useDataOperations } from '@/hooks/useDataOperations';
@@ -106,6 +106,75 @@ export default function ImportPage() {
     setEditingCell(null);
   };
 
+  // Multi-cell paste from Excel/CSV
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const pasteText = e.clipboardData.getData('text');
+    if (!pasteText) return;
+
+    // Detect tab-separated multi-cell paste (Excel format)
+    const lines = pasteText.split(/\r?\n/).filter((l) => l.trim() !== '');
+    if (lines.length === 0) return;
+
+    const hasTabs = lines.some((l) => l.includes('\t'));
+    if (!hasTabs && lines.length === 1) return; // single value → let native input handle it
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Determine starting cell
+    const startRow = editingCell?.row ?? 0;
+    const colNames = preview?.columns.map((c) => c.name) ?? [];
+    const startColIdx = editingCell ? colNames.indexOf(editingCell.col) : 0;
+
+    setEditableRows((prev) => {
+      const next = [...prev];
+      for (let r = 0; r < lines.length && startRow + r < next.length; r++) {
+        const cells = lines[r].split('\t');
+        const rowData = { ...next[startRow + r] };
+        for (let c = 0; c < cells.length && startColIdx + c < colNames.length; c++) {
+          rowData[colNames[startColIdx + c]] = cells[c].trim() || null;
+        }
+        next[startRow + r] = rowData;
+      }
+      return next;
+    });
+
+    setEditingCell(null);
+    message.success(`已粘贴 ${lines.length} 行 × ${lines[0]?.split('\t').length ?? 0} 列`);
+  }, [editingCell, preview]);
+
+  const moveColumn = (colIdx: number, direction: -1 | 1) => {
+    const newIdx = colIdx + direction;
+    if (newIdx < 0 || !preview || newIdx >= preview.columns.length) return;
+    const colNames = preview.columns.map((c) => c.name);
+
+    // Reorder columnTypes
+    setColumnTypes((prev) => {
+      const next = [...prev];
+      [next[colIdx], next[newIdx]] = [next[newIdx], next[colIdx]];
+      return next;
+    });
+
+    // Reorder data in editableRows
+    setEditableRows((prev) => prev.map((row) => {
+      const newRow = { ...row };
+      const leftCol = colNames[colIdx];
+      const rightCol = colNames[newIdx];
+      const tmp = newRow[leftCol];
+      newRow[leftCol] = newRow[rightCol];
+      newRow[rightCol] = tmp;
+      return newRow;
+    }));
+
+    // Reorder columns in preview metadata
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const nextCols = [...prev.columns];
+      [nextCols[colIdx], nextCols[newIdx]] = [nextCols[newIdx], nextCols[colIdx]];
+      return { ...prev, columns: nextCols };
+    });
+  };
+
   const deleteRow = (rowIdx: number) => {
     setDeletedRows((prev) => new Set(prev).add(rowIdx));
   };
@@ -133,9 +202,11 @@ export default function ImportPage() {
         const role = ROLE_LABELS[ct?.role ?? col.role ?? 'unknown'];
         return {
           title: (
-            <span style={{ cursor: 'pointer', userSelect: 'none', fontSize: 12 }}>
+            <span style={{ cursor: 'pointer', userSelect: 'none', fontSize: 12, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Button type="text" size="small" style={{ fontSize: 10, padding: 0, minWidth: 14, height: 18 }}
+                disabled={i === 0} onClick={() => moveColumn(i, -1)}><LeftOutlined /></Button>
               <span onClick={() => toggleColumnType(col.name)}>{col.name}</span>
-              <Tag color={ct?.type === 'numeric' ? 'blue' : 'orange'} style={{ marginLeft: 4, fontSize: 10, cursor: 'pointer' }}
+              <Tag color={ct?.type === 'numeric' ? 'blue' : 'orange'} style={{ marginLeft: 2, fontSize: 10, cursor: 'pointer' }}
                 onClick={() => toggleColumnType(col.name)}>
                 {ct?.type === 'numeric' ? '#' : 'Aa'}
               </Tag>
@@ -143,6 +214,8 @@ export default function ImportPage() {
                 onClick={() => toggleColumnRole(col.name)}>
                 {role.label}
               </Tag>
+              <Button type="text" size="small" style={{ fontSize: 10, padding: 0, minWidth: 14, height: 18 }}
+                disabled={i === preview.columns.length - 1} onClick={() => moveColumn(i, 1)}><RightOutlined /></Button>
             </span>
           ),
           dataIndex: col.name, key: col.name, width: 150,
@@ -279,12 +352,17 @@ export default function ImportPage() {
               </Radio.Group>
               <Text type="secondary">编码: {preview.encoding}</Text>
             </Space>
-            <Table
-              columns={previewColumns}
-              dataSource={editableRows.map((row, i) => ({ ...row, _key: i }))}
-              rowKey="_key" scroll={{ x: 'max-content', y: 400 }} size="small"
-              pagination={false} style={{ marginBottom: 12 }}
-            />
+            <div onPaste={handlePaste}>
+              <Table
+                columns={previewColumns}
+                dataSource={editableRows.map((row, i) => ({ ...row, _key: i }))}
+                rowKey="_key" scroll={{ x: 'max-content', y: 400 }} size="small"
+                pagination={false} style={{ marginBottom: 4 }}
+              />
+            </div>
+            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 8 }}>
+              点击单元格编辑 · 列头 ← → 调整列顺序 · 从 Excel 复制后在此粘贴 (Ctrl+V)
+            </Text>
             <Text type="secondary">
               预览前 {preview.rows.length} 行
               {deletedRows.size > 0 && <span style={{ color: '#c47878' }}>（已标记删除 {deletedRows.size} 行）</span>}
