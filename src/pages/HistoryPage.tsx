@@ -107,9 +107,9 @@ export default function HistoryPage() {
               <div style={{ marginTop: 8 }}>
                 <Space>
                   {selected.relatedChartIds.length > 0 && <Button icon={<BarChartOutlined />} onClick={() => { navigate('/charts'); }}>查看关联图表 ({selected.relatedChartIds.length})</Button>}
-                  <Button icon={<EditOutlined />} onClick={() => {
+                  <Button icon={<EditOutlined />} onClick={async () => {
                     const cfg = selected.analysisConfig;
-                    setCurrentDataset(cfg.datasetId);
+                    await setCurrentDataset(cfg.datasetId);
                     navigate('/analysis');
                   }}>重新分析</Button>
                 </Space>

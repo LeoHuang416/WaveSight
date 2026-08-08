@@ -82,6 +82,14 @@ describe('HistoryPage', () => {
     render(<Wrapper><HistoryPage /></Wrapper>);
     expect(screen.getByText('历史记录')).toBeDefined();
   });
+  it('shows empty state when no record selected', () => {
+    render(<Wrapper><HistoryPage /></Wrapper>);
+    expect(screen.getByText('选择一条记录查看详情')).toBeDefined();
+  });
+  it('shows empty list when no history', () => {
+    render(<Wrapper><HistoryPage /></Wrapper>);
+    expect(screen.getByText('暂无记录')).toBeDefined();
+  });
 });
 
 describe('SettingsPage', () => {
