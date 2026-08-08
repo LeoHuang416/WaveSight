@@ -18,7 +18,7 @@ export const useChartStore = create<ChartState>()((set, get) => ({
   editingChartId: null,
   viewMode: 'gallery',
   refresh: async () => { const charts = await getAllCharts(); set({ charts }); },
-  addChart: async (cfg) => { await saveChart(cfg); const charts = await getAllCharts(); set({ charts }); },
+  addChart: async (cfg) => { set((s) => ({ charts: [cfg, ...s.charts] })); await saveChart(cfg); const charts = await getAllCharts(); set({ charts }); },
   removeChart: async (id) => { await dbDeleteChart(id); const charts = await getAllCharts(); set({ charts, editingChartId: get().editingChartId === id ? null : get().editingChartId }); },
   setEditingChart: (id) => set({ editingChartId: id, viewMode: id ? 'editor' : 'gallery' }),
   setViewMode: (mode) => set({ viewMode: mode }),
