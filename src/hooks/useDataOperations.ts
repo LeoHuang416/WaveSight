@@ -14,50 +14,37 @@ export function useDataOperations() {
     fileName: string;
     columns: ColumnMeta[];
     rows: Record<string, unknown>[];
+    experimentGroupCol?: string;
   }) => {
-    // For very large datasets, split rows and store as separate smaller datasets
-    // with a shared prefix, or chunk the save operation
+    const makeDataset = (chunkRows: Record<string, unknown>[]): Dataset => ({
+      id: generateId(),
+      name: params.name,
+      fileName: params.fileName,
+      columns: params.columns,
+      rows: chunkRows,
+      rowCount: params.rows.length,
+      colCount: params.columns.length,
+      importedAt: Date.now(),
+      experimentGroupCol: params.experimentGroupCol,
+    });
+
     if (params.rows.length > CHUNK_SIZE) {
-      // Chunk the rows into the dataset to avoid IndexedDB transaction limits
       const chunks: Record<string, unknown>[][] = [];
       for (let i = 0; i < params.rows.length; i += CHUNK_SIZE) {
         chunks.push(params.rows.slice(i, i + CHUNK_SIZE));
       }
-
-      // Save first chunk with metadata, then append remaining chunks
-      const ds: Dataset = {
-        id: generateId(),
-        name: params.name,
-        fileName: params.fileName,
-        columns: params.columns,
-        rows: chunks[0],
-        rowCount: params.rows.length,
-        colCount: params.columns.length,
-        importedAt: Date.now(),
-      };
+      const ds = makeDataset(chunks[0]);
       await saveDataset(ds);
-
-      // Append remaining chunks
       for (let i = 1; i < chunks.length; i++) {
         ds.rows.push(...chunks[i]);
         await saveDataset(ds);
       }
-
       await setCurrentDataset(ds.id);
       await refreshDatasetList();
       return ds;
     }
 
-    const ds: Dataset = {
-      id: generateId(),
-      name: params.name,
-      fileName: params.fileName,
-      columns: params.columns,
-      rows: params.rows,
-      rowCount: params.rows.length,
-      colCount: params.columns.length,
-      importedAt: Date.now(),
-    };
+    const ds = makeDataset(params.rows);
     await saveDataset(ds);
     await setCurrentDataset(ds.id);
     await refreshDatasetList();

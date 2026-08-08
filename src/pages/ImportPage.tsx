@@ -5,7 +5,7 @@ import { InboxOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { parseFile, loadFullFile, validateFileSize, type ImportProgress } from '@/utils/fileParser';
 import { useDataOperations } from '@/hooks/useDataOperations';
-import type { ImportPreview, ColumnType, ColumnMeta } from '@/types/data';
+import type { ImportPreview, ColumnType, ColumnRole, ColumnMeta } from '@/types/data';
 
 const { Dragger } = Upload;
 const { Title, Text } = Typography;
@@ -20,7 +20,7 @@ export default function ImportPage() {
   const [hasHeader, setHasHeader] = useState(true);
   const [skipRows, setSkipRows] = useState(0);
   const [delimiter, setDelimiter] = useState(',');
-  const [columnTypes, setColumnTypes] = useState<{ name: string; type: ColumnType }[]>([]);
+  const [columnTypes, setColumnTypes] = useState<{ name: string; type: ColumnType; role: ColumnRole }[]>([]);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [sizeWarning, setSizeWarning] = useState<string | null>(null);
 
@@ -34,7 +34,7 @@ export default function ImportPage() {
       const p = await parseFile(f); setPreview(p);
       if (p.delimiter === '\t') setDelimiter('tsv');
       else if (p.delimiter === ';') setDelimiter('semicolon');
-      setColumnTypes(p.columns.map((c) => ({ name: c.name, type: c.type })));
+      setColumnTypes(p.columns.map((c) => ({ name: c.name, type: c.type, role: c.role ?? 'unknown' })));
       setStep(1);
     } catch (err) { message.error(`文件解析失败: ${err}`); }
     finally { setLoading(false); }
@@ -46,10 +46,10 @@ export default function ImportPage() {
       const delimMap: Record<string, string> = { ',': ',', 'tsv': '\t', 'semicolon': ';' };
       const result = await loadFullFile(file, { hasHeader, skipRows, delimiter: delimMap[delimiter] ?? ',' }, setImportProgress);
       const columns: ColumnMeta[] = result.columns.map((c, i) => {
-        const userType = columnTypes.find((ct) => ct.name === c.name);
-        return { name: c.name, type: userType?.type ?? c.type, index: i };
+        const userOverride = columnTypes.find((ct) => ct.name === c.name);
+        return { name: c.name, type: userOverride?.type ?? c.type, role: userOverride?.role ?? c.role ?? 'unknown', index: i };
       });
-      await importDataset({ name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name, columns, rows: result.rows });
+      await importDataset({ name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name, columns, rows: result.rows, experimentGroupCol: result.experimentGroupCol });
       message.success(`成功导入 ${result.rows.length} 行数据`);
       navigate('/');
     } catch (err) { message.error(`导入失败: ${err}`); }
@@ -61,22 +61,34 @@ export default function ImportPage() {
       c.name === colName ? { ...c, type: c.type === 'numeric' ? 'categorical' : 'numeric' } : c));
   };
 
-  const previewColumns: ColumnsType<Record<string, unknown>> = preview?.columns.map((col, i) => ({
-    title: (
-      <span onClick={() => toggleColumnType(col.name)} style={{ cursor: 'pointer', userSelect: 'none' }}>
-        {col.name}
-        <Tag color={columnTypes[i]?.type === 'numeric' ? 'blue' : 'orange'} style={{ marginLeft: 4 }}>
-          {columnTypes[i]?.type === 'numeric' ? '🔢' : '🔤'}
-        </Tag>
-      </span>
-    ),
-    dataIndex: col.name, key: col.name, ellipsis: true,
-    render: (val: unknown) => {
-      if (val === null || val === undefined || val === '')
-        return <span style={{ color: '#c47878', background: '#fff1f0', padding: '0 6px', borderRadius: 4 }}>—</span>;
-      return String(val);
-    },
-  })) ?? [];
+  const ROLE_LABELS: Record<ColumnRole, { label: string; color: string }> = {
+    independent: { label: '自变量', color: 'green' },
+    dependent: { label: '因变量', color: 'blue' },
+    metadata: { label: '元数据', color: 'default' },
+    unknown: { label: '未知', color: 'orange' },
+  };
+
+  const previewColumns: ColumnsType<Record<string, unknown>> = preview?.columns.map((col, i) => {
+    const ct = columnTypes[i];
+    const role = ROLE_LABELS[ct?.role ?? col.role ?? 'unknown'];
+    return {
+      title: (
+        <span onClick={() => toggleColumnType(col.name)} style={{ cursor: 'pointer', userSelect: 'none' }}>
+          {col.name}
+          <Tag color={ct?.type === 'numeric' ? 'blue' : 'orange'} style={{ marginLeft: 4, fontSize: 10 }}>
+            {ct?.type === 'numeric' ? '#' : 'Aa'}
+          </Tag>
+          <Tag color={role.color} style={{ marginLeft: 2, fontSize: 10 }}>{role.label}</Tag>
+        </span>
+      ),
+      dataIndex: col.name, key: col.name, ellipsis: true,
+      render: (val: unknown) => {
+        if (val === null || val === undefined || val === '')
+          return <span style={{ color: '#c47878', background: '#fff1f0', padding: '0 6px', borderRadius: 4 }}>—</span>;
+        return String(val);
+      },
+    };
+  }) ?? [];
 
   return (
     <div style={{ padding: '4px 0 24px' }}>
@@ -91,6 +103,19 @@ export default function ImportPage() {
 
         {sizeWarning && (
           <Alert type="warning" message={sizeWarning} showIcon style={{ marginBottom: 16 }} closable onClose={() => setSizeWarning(null)} />
+        )}
+
+        {preview?.experimentGroupCol && (
+          <Alert type="info" showIcon style={{ marginBottom: 16 }}
+            message={`检测到平行实验分组列: "${preview.experimentGroupCol}"`}
+            description="此列包含多个实验批次/运行编号，数据将按此列分组管理。"
+          />
+        )}
+        {preview?.irrelevantColumns && preview.irrelevantColumns.length > 0 && (
+          <Alert type="warning" showIcon style={{ marginBottom: 16 }} closable
+            message={`检测到 ${preview.irrelevantColumns.length} 个可能无关的列: ${preview.irrelevantColumns.join(', ')}`}
+            description={'这些列为空值、常数或无信息量的标识列，已自动标记为「元数据」。可在预览中手动调整。'}
+          />
         )}
 
         {importProgress && (

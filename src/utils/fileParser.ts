@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import type { ImportPreview, ColumnType } from '@/types/data';
+import type { ImportPreview, ColumnType, ColumnRole } from '@/types/data';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 const TEXT_ENCODINGS = ['utf-8', 'gb18030', 'gbk', 'big5', 'shift_jis', 'windows-1252'] as const;
@@ -11,12 +11,50 @@ export interface ImportProgress {
   total: number;
 }
 
+// ---- Column role detection heuristics ----
+
+/** Lowercase name for matching */
+function norm(name: string): string {
+  return name.toLowerCase().replace(/[\s_-]/g, '').replace(/[()（）]/g, '');
+}
+
+const IV_PATTERNS = [
+  'group', 'treatment', 'condition', 'time', 'temp', 'temperature',
+  'conc', 'concentration', 'dose', 'factor', 'category', 'type', 'method',
+  'solvent', 'catalyst', 'substrate', 'reagent', 'ph', 'pressure',
+  'humidity', 'speed', 'feed', 'ratio', 'loading', 'scanrate', 'scan',
+  'cycle', 'step', 'stage', 'level', 'mode', 'atmosphere', 'gas',
+];
+
+const DV_PATTERNS = [
+  'yield', 'response', 'activity', 'rate', 'result', 'value', 'measure',
+  'output', 'score', 'selectivity', 'conversion', 'purity', 'absorbance',
+  'intensity', 'count', 'mass', 'volume', 'area', 'height', 'amount',
+  'efficiency', 'performance', 'removal', 'degradation', 'adsorption',
+  'capacity', 'content', 'recovery', 'signal', 'peak', 'current',
+  'potential', 'resistance', 'conductivity', 'viscosity', 'density',
+  'weight', 'percentage', 'ratio_yield',
+];
+
+const META_PATTERNS = [
+  'id', 'sample', 'run', 'batch', 'replicate', 'date', 'time',
+  'note', 'comment', 'operator', 'instrument', 'file', 'plate',
+  'well', 'entry', 'number', 'trial', 'repeat', 'index', 'row',
+  'column', 'code', 'label', 'name_sample',
+];
+
 function detectBOM(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return 'utf-8-bom';
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le';
   if (bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be';
   return 'utf-8';
+}
+
+/** Match column name against keyword list */
+function matchPattern(name: string, patterns: string[]): boolean {
+  const n = norm(name);
+  return patterns.some((p) => n.includes(p) || p.includes(n));
 }
 
 function inferColumnType(values: unknown[]): ColumnType {
@@ -26,10 +64,58 @@ function inferColumnType(values: unknown[]): ColumnType {
   return numericCount / nonEmpty.length >= 0.7 ? 'numeric' : 'categorical';
 }
 
-function inferAllColumnTypes(headers: string[], rows: Record<string, unknown>[]): { name: string; type: ColumnType }[] {
+/** Infer the semantic role of a column in experimental context */
+function inferColumnRole(name: string, colType: ColumnType, values: unknown[]): ColumnRole {
+  // Check by name first (strong signal)
+  if (matchPattern(name, META_PATTERNS)) return 'metadata';
+  if (matchPattern(name, IV_PATTERNS)) return 'independent';
+  if (matchPattern(name, DV_PATTERNS)) return 'dependent';
+
+  // Check by data pattern
+  const nonEmpty = values.filter((v) => v !== null && v !== undefined && v !== '');
+  const uniqueValues = new Set(nonEmpty.map((v) => String(v)));
+
+  // High uniqueness → metadata/identifier
+  if (nonEmpty.length > 0 && uniqueValues.size / nonEmpty.length > 0.9) return 'metadata';
+
+  // Categorical with few unique values → likely independent variable
+  if (colType === 'categorical' && uniqueValues.size >= 2 && uniqueValues.size <= 10) return 'independent';
+
+  // Numeric → likely dependent variable (measurement)
+  if (colType === 'numeric') return 'dependent';
+
+  return 'unknown';
+}
+
+/** Check if a column is likely irrelevant (all same, all null, mostly null) */
+function isIrrelevant(values: unknown[]): boolean {
+  const nonEmpty = values.filter((v) => v !== null && v !== undefined && v !== '');
+  if (nonEmpty.length === 0) return true; // all null
+  if (new Set(nonEmpty.map((v) => String(v))).size === 1) return true; // constant value
+  return false;
+}
+
+/** Detect parallel experiment grouping column */
+function detectExperimentGroup(headers: string[], rows: Record<string, unknown>[]): string | undefined {
+  for (const h of headers) {
+    const n = norm(h);
+    // Explicit experiment/batch names
+    if (n.includes('experiment') || n.includes('exp') || n.includes('batch') || n.includes('run')) {
+      const values = rows.map((r) => String(r[h] ?? ''));
+      const unique = new Set(values);
+      // Must have 2-20 groups
+      if (unique.size >= 2 && unique.size <= 20) return h;
+    }
+  }
+  return undefined;
+}
+
+function inferAllColumnTypes(headers: string[], rows: Record<string, unknown>[]): { name: string; type: ColumnType; role: ColumnRole }[] {
   return headers.map((header) => {
     const values = rows.map((row) => row[header]);
-    return { name: header, type: inferColumnType(values) };
+    const colType = inferColumnType(values);
+    const role = inferColumnRole(header, colType, values);
+    return { name: header, type: colType, role };
   });
 }
 
@@ -71,13 +157,32 @@ export async function parseFile(file: File): Promise<ImportPreview> {
   return parseTextFile(file);
 }
 
+function buildPreview(headers: string[], allRows: Record<string, unknown>[], totalRows: number, encoding: string, delimiter: string): ImportPreview {
+  const columns = inferAllColumnTypes(headers, allRows);
+  const irrelevantColumns = headers.filter((h) => {
+    const values = allRows.map((r) => r[h]);
+    return isIrrelevant(values);
+  });
+  const experimentGroupCol = detectExperimentGroup(headers, allRows);
+
+  return {
+    columns,
+    rows: allRows.slice(0, 20),
+    totalRows,
+    encoding,
+    delimiter,
+    experimentGroupCol,
+    irrelevantColumns: irrelevantColumns.length > 0 ? irrelevantColumns : undefined,
+  };
+}
+
 async function parseExcel(file: File): Promise<ImportPreview> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
   const headers = Object.keys(jsonData[0] ?? {});
-  return { columns: inferAllColumnTypes(headers, jsonData), rows: jsonData.slice(0, 20), totalRows: jsonData.length, encoding: 'utf-8', delimiter: '' };
+  return buildPreview(headers, jsonData, jsonData.length, 'utf-8', '');
 }
 
 async function parseJSON(file: File): Promise<ImportPreview> {
@@ -85,7 +190,7 @@ async function parseJSON(file: File): Promise<ImportPreview> {
   const arr = JSON.parse(text);
   const array = Array.isArray(arr) ? arr : [arr];
   const headers = Object.keys(array[0] ?? {});
-  return { columns: inferAllColumnTypes(headers, array), rows: array.slice(0, 20), totalRows: array.length, encoding: 'utf-8', delimiter: '' };
+  return buildPreview(headers, array, array.length, 'utf-8', '');
 }
 
 async function parseTextFile(file: File): Promise<ImportPreview> {
@@ -99,9 +204,8 @@ async function parseTextFile(file: File): Promise<ImportPreview> {
 
   const result = Papa.parse<Record<string, unknown>>(text, { header: true, delimiter, skipEmptyLines: true, dynamicTyping: false, preview: 20 });
   const headers = result.meta.fields ?? [];
-  // totalRows: estimate data rows (exclude header line from count)
   const estimatedTotalRows = Math.max(0, countTotalRows(text, delimiter) - 1);
-  return { columns: inferAllColumnTypes(headers, result.data), rows: result.data.slice(0, 20), totalRows: estimatedTotalRows, encoding, delimiter };
+  return buildPreview(headers, result.data, estimatedTotalRows, encoding, delimiter);
 }
 
 /** Estimate total rows without parsing everything */
@@ -124,7 +228,7 @@ export async function loadFullFile(
   file: File,
   options: { hasHeader: boolean; skipRows: number; delimiter?: string },
   onProgress?: (progress: ImportProgress) => void
-): Promise<{ headers: string[]; rows: Record<string, unknown>[]; columns: { name: string; type: ColumnType }[] }> {
+): Promise<{ headers: string[]; rows: Record<string, unknown>[]; columns: { name: string; type: ColumnType; role: ColumnRole }[]; experimentGroupCol?: string }> {
   const sizeResult = validateFileSize(file);
   if (!sizeResult.valid) throw new Error(sizeResult.message);
 
@@ -147,11 +251,11 @@ export async function loadFullFile(
         return newRow;
       });
       onProgress?.({ phase: 'saving', loaded: dataRows.length, total: dataRows.length });
-      return { headers: colNames, rows: dataRows, columns: inferAllColumnTypes(colNames, dataRows) };
+      return { headers: colNames, rows: dataRows, columns: inferAllColumnTypes(colNames, dataRows), experimentGroupCol: detectExperimentGroup(colNames, dataRows) };
     }
     const headers = Object.keys(skippedRows[0] ?? {});
     onProgress?.({ phase: 'saving', loaded: skippedRows.length, total: skippedRows.length });
-    return { headers, rows: skippedRows, columns: inferAllColumnTypes(headers, skippedRows) };
+    return { headers, rows: skippedRows, columns: inferAllColumnTypes(headers, skippedRows), experimentGroupCol: detectExperimentGroup(headers, skippedRows) };
   }
 
   // Text file path (CSV/TSV/TXT)
@@ -243,5 +347,5 @@ export async function loadFullFile(
     ? (result.meta.fields ?? [])
     : Array.from({ length: Object.keys(skippedRows[0] ?? {}).length }, (_, i) => `列${i + 1}`);
   onProgress?.({ phase: 'saving', loaded: skippedRows.length, total: skippedRows.length });
-  return { headers, rows: skippedRows, columns: inferAllColumnTypes(headers, skippedRows) };
+  return { headers, rows: skippedRows, columns: inferAllColumnTypes(headers, skippedRows), experimentGroupCol: detectExperimentGroup(headers, skippedRows) };
 }
