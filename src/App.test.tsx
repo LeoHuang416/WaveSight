@@ -124,8 +124,9 @@ describe('SettingsPage', () => {
   });
   it('shows theme and dark mode controls', () => {
     render(<Wrapper><SettingsPage /></Wrapper>);
-    expect(screen.getByText('主题方案')).toBeDefined();
-    expect(screen.getByText('深色模式')).toBeDefined();
+    expect(screen.getByText('界面风格')).toBeDefined();
+    expect(screen.getByText('外观模式')).toBeDefined();
+    expect(screen.getByText('强调色')).toBeDefined();
   });
   it('shows version info', () => {
     render(<Wrapper><SettingsPage /></Wrapper>);

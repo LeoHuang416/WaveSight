@@ -49,6 +49,17 @@ describe('useSettingsStore', () => {
     expect(useSettingsStore.getState().edgeTabPosition).toBe('top');
     expect(useSettingsStore.getState().edgeCompactMode).toBe(false);
   });
+  it('has fluent defaults', () => {
+    expect(useSettingsStore.getState().accentColor).toBe('blue');
+    expect(useSettingsStore.getState().fluentGradient).toBe('cool');
+    expect(useSettingsStore.getState().fluentGlassStrength).toBe('standard');
+  });
+  it('has system appearance mode', () => {
+    expect(useSettingsStore.getState().appearanceMode).toBe('light');
+    useSettingsStore.getState().setAppearanceMode('system');
+    expect(useSettingsStore.getState().appearanceMode).toBe('system');
+    useSettingsStore.getState().setAppearanceMode('light');
+  });
   it('supports csv as export format', () => {
     expect(useSettingsStore.getState().defaultExportFormat).toBe('svg');
     useSettingsStore.getState().setDefaultExportFormat('csv');

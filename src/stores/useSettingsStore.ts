@@ -1,15 +1,17 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ColorScheme, ExportFormat } from '@/types/chart';
-import { DEFAULT_THEME_ID } from '@/themes';
+import { DEFAULT_THEME_ID, DEFAULT_ACCENT } from '@/themes';
 
-export type AppearanceMode = 'light' | 'dark';
+export type AppearanceMode = 'light' | 'dark' | 'system';
 export type RowHeight = 'compact' | 'standard' | 'relaxed';
 export type FontSize = 'small' | 'standard' | 'large';
 export type DataAlign = 'auto' | 'left' | 'decimal';
 export type EdgeSidebarMode = 'always' | 'auto' | 'hidden';
 export type EdgePanelDefault = 'expanded' | 'collapsed';
 export type EdgeTabPosition = 'top' | 'left';
+export type FluentGradient = 'cool' | 'warm' | 'dark';
+export type FluentGlassStrength = 'light' | 'standard' | 'heavy';
 
 export const ROW_HEIGHT_MAP: Record<RowHeight, number> = { compact: 40, standard: 48, relaxed: 56 };
 export const FONT_SIZE_MAP: Record<FontSize, number> = { small: 12, standard: 14, large: 16 };
@@ -24,6 +26,9 @@ interface SettingsState {
   edgePanelDefault: EdgePanelDefault;
   edgeTabPosition: EdgeTabPosition;
   edgeCompactMode: boolean;
+  accentColor: string;
+  fluentGradient: FluentGradient;
+  fluentGlassStrength: FluentGlassStrength;
   alpha: number;
   significantDigits: number;
   defaultColorScheme: ColorScheme;
@@ -39,6 +44,9 @@ interface SettingsState {
   setEdgePanelDefault: (v: EdgePanelDefault) => void;
   setEdgeTabPosition: (v: EdgeTabPosition) => void;
   setEdgeCompactMode: (v: boolean) => void;
+  setAccentColor: (v: string) => void;
+  setFluentGradient: (v: FluentGradient) => void;
+  setFluentGlassStrength: (v: FluentGlassStrength) => void;
   setAlpha: (v: number) => void;
   setSignificantDigits: (v: number) => void;
   setDefaultColorScheme: (v: ColorScheme) => void;
@@ -59,6 +67,9 @@ export const useSettingsStore = create<SettingsState>()(
       edgePanelDefault: 'expanded' as EdgePanelDefault,
       edgeTabPosition: 'top' as EdgeTabPosition,
       edgeCompactMode: false,
+      accentColor: DEFAULT_ACCENT,
+      fluentGradient: 'cool' as FluentGradient,
+      fluentGlassStrength: 'standard' as FluentGlassStrength,
       alpha: 0.05,
       significantDigits: 3,
       defaultColorScheme: 'grayscale',
@@ -74,6 +85,9 @@ export const useSettingsStore = create<SettingsState>()(
       setEdgePanelDefault: (edgePanelDefault) => set({ edgePanelDefault }),
       setEdgeTabPosition: (edgeTabPosition) => set({ edgeTabPosition }),
       setEdgeCompactMode: (edgeCompactMode) => set({ edgeCompactMode }),
+      setAccentColor: (accentColor) => set({ accentColor }),
+      setFluentGradient: (fluentGradient) => set({ fluentGradient }),
+      setFluentGlassStrength: (fluentGlassStrength) => set({ fluentGlassStrength }),
       setAlpha: (alpha) => set({ alpha }),
       setSignificantDigits: (significantDigits) => set({ significantDigits }),
       setDefaultColorScheme: (defaultColorScheme) => set({ defaultColorScheme }),

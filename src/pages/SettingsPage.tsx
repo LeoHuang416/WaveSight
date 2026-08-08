@@ -4,8 +4,8 @@ import { ExportOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { getStorageStats, exportAllData, clearAllData } from '@/db/operations';
 import { exportAllDataJSON } from '@/utils/export';
-import { THEMES, getTheme } from '@/themes';
-import type { AppearanceMode, RowHeight, FontSize, DataAlign, EdgeSidebarMode, EdgePanelDefault, EdgeTabPosition } from '@/stores/useSettingsStore';
+import { THEMES, ACCENT_PRESETS, getAccentColor } from '@/themes';
+import type { AppearanceMode, RowHeight, FontSize, DataAlign, EdgeSidebarMode, EdgePanelDefault, EdgeTabPosition, FluentGradient, FluentGlassStrength } from '@/stores/useSettingsStore';
 
 const { Title, Text } = Typography;
 
@@ -13,15 +13,18 @@ export default function SettingsPage() {
   const {
     uiTheme, appearanceMode, kimiRowHeight, kimiFontSize, kimiDataAlign,
     edgeSidebarMode, edgePanelDefault, edgeTabPosition, edgeCompactMode,
+    accentColor, fluentGradient, fluentGlassStrength,
     alpha, significantDigits, defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
     setUiTheme, setAppearanceMode, setKimiRowHeight, setKimiFontSize, setKimiDataAlign,
     setEdgeSidebarMode, setEdgePanelDefault, setEdgeTabPosition, setEdgeCompactMode,
+    setAccentColor, setFluentGradient, setFluentGlassStrength,
     setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays,
   } = useSettingsStore();
 
   const [stats, setStats] = useState({ datasetCount: 0, chartCount: 0, historyCount: 0 });
   const isKimi = uiTheme === 'kimi-minimal';
   const isEdge = uiTheme === 'edge-modern';
+  const isFluent = uiTheme === 'fluent-glass';
 
   useEffect(() => { getStorageStats().then(setStats); }, []);
 
@@ -57,92 +60,113 @@ export default function SettingsPage() {
         <Card title="外观" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
             <Space>
-              <Text style={{ width: 80, display: 'inline-block' }}>主题方案</Text>
-              <Select
-                value={uiTheme}
-                onChange={setUiTheme}
-                style={{ width: 280 }}
-                options={THEMES.map((t) => ({
-                  label: `${t.label} — ${t.description}`,
-                  value: t.id,
-                }))}
-              />
-            </Space>
-            <Space>
-              <Text style={{ width: 80, display: 'inline-block' }}>深色模式</Text>
-              <Switch
-                checked={appearanceMode === 'dark'}
-                onChange={(v) => setAppearanceMode(v ? 'dark' : 'light')}
-                checkedChildren="🌙"
-                unCheckedChildren="☀️"
-              />
+              <Text style={{ width: 80, display: 'inline-block' }}>界面风格</Text>
+              <Radio.Group value={uiTheme} onChange={(e) => setUiTheme(e.target.value)}>
+                <Space direction="vertical" size={4}>
+                  {THEMES.map((t) => (
+                    <Radio key={t.id} value={t.id}>{t.label} — {t.description}</Radio>
+                  ))}
+                </Space>
+              </Radio.Group>
             </Space>
 
-            {isEdge && (
-              <>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0', paddingTop: 8 }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Edge Modern 子选项</Text>
-                </div>
-                <Space>
-                  <Text style={{ width: 80, display: 'inline-block' }}>侧边栏</Text>
-                  <Radio.Group value={edgeSidebarMode} onChange={(e) => setEdgeSidebarMode(e.target.value as EdgeSidebarMode)}>
-                    <Radio.Button value="always">常驻</Radio.Button>
-                    <Radio.Button value="auto">自动收起</Radio.Button>
-                    <Radio.Button value="hidden">完全隐藏</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space>
-                  <Text style={{ width: 80, display: 'inline-block' }}>右侧面板</Text>
-                  <Radio.Group value={edgePanelDefault} onChange={(e) => setEdgePanelDefault(e.target.value as EdgePanelDefault)}>
-                    <Radio.Button value="expanded">默认展开</Radio.Button>
-                    <Radio.Button value="collapsed">默认收起</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space>
-                  <Text style={{ width: 80, display: 'inline-block' }}>标签页位置</Text>
-                  <Radio.Group value={edgeTabPosition} onChange={(e) => setEdgeTabPosition(e.target.value as EdgeTabPosition)}>
-                    <Radio.Button value="top">顶部</Radio.Button>
-                    <Radio.Button value="left">左侧垂直</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space>
-                  <Text style={{ width: 80, display: 'inline-block' }}>紧凑模式</Text>
-                  <Switch checked={edgeCompactMode} onChange={setEdgeCompactMode} />
-                  <Text type="secondary" style={{ fontSize: 12 }}>间距减少 30%，适合小屏幕</Text>
-                </Space>
-              </>
-            )}
+            <Space>
+              <Text style={{ width: 80, display: 'inline-block' }}>外观模式</Text>
+              <Radio.Group value={appearanceMode} onChange={(e) => setAppearanceMode(e.target.value as AppearanceMode)}>
+                <Radio.Button value="system">跟随系统</Radio.Button>
+                <Radio.Button value="light">浅色</Radio.Button>
+                <Radio.Button value="dark">深色</Radio.Button>
+              </Radio.Group>
+            </Space>
+
+            <Space>
+              <Text style={{ width: 80, display: 'inline-block' }}>强调色</Text>
+              <Radio.Group value={accentColor} onChange={(e) => setAccentColor(e.target.value)}>
+                {ACCENT_PRESETS.map((p) => (
+                  <Radio.Button key={p.id} value={p.id}>
+                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: p.color, marginRight: 4, verticalAlign: 'middle' }} />
+                    {p.label}
+                  </Radio.Button>
+                ))}
+              </Radio.Group>
+            </Space>
+
+            {/* ── Theme-specific advanced options ── */}
+            <div style={{ borderTop: '1px solid #eee', margin: '4px 0', paddingTop: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>高级</Text>
+            </div>
 
             {isKimi && (
-              <>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0', paddingTop: 8 }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Kimi Minimal 子选项</Text>
-                </div>
-                <Space>
-                  <Text style={{ width: 80, display: 'inline-block' }}>行高</Text>
+              <Space direction="vertical" size={8}>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>行高</Text>
                   <Radio.Group value={kimiRowHeight} onChange={(e) => setKimiRowHeight(e.target.value as RowHeight)}>
                     <Radio.Button value="compact">紧凑 40px</Radio.Button>
                     <Radio.Button value="standard">标准 48px</Radio.Button>
                     <Radio.Button value="relaxed">宽松 56px</Radio.Button>
                   </Radio.Group>
                 </Space>
-                <Space>
-                  <Text style={{ width: 80, display: 'inline-block' }}>字体大小</Text>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>字体大小</Text>
                   <Radio.Group value={kimiFontSize} onChange={(e) => setKimiFontSize(e.target.value as FontSize)}>
                     <Radio.Button value="small">小 12px</Radio.Button>
                     <Radio.Button value="standard">标准 14px</Radio.Button>
                     <Radio.Button value="large">大 16px</Radio.Button>
                   </Radio.Group>
                 </Space>
-                <Space>
-                  <Text style={{ width: 80, display: 'inline-block' }}>数据对齐</Text>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>数据对齐</Text>
                   <Radio.Group value={kimiDataAlign} onChange={(e) => setKimiDataAlign(e.target.value as DataAlign)}>
                     <Radio.Button value="auto">自动</Radio.Button>
                     <Radio.Button value="left">全部左对齐</Radio.Button>
                     <Radio.Button value="decimal">小数点对齐</Radio.Button>
                   </Radio.Group>
                 </Space>
-              </>
+              </Space>
+            )}
+
+            {isEdge && (
+              <Space direction="vertical" size={8}>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>侧边栏</Text>
+                  <Radio.Group value={edgeSidebarMode} onChange={(e) => setEdgeSidebarMode(e.target.value as EdgeSidebarMode)}>
+                    <Radio.Button value="always">常驻</Radio.Button>
+                    <Radio.Button value="auto">自动收起</Radio.Button>
+                    <Radio.Button value="hidden">完全隐藏</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>右侧面板</Text>
+                  <Radio.Group value={edgePanelDefault} onChange={(e) => setEdgePanelDefault(e.target.value as EdgePanelDefault)}>
+                    <Radio.Button value="expanded">默认展开</Radio.Button>
+                    <Radio.Button value="collapsed">默认收起</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>标签页位置</Text>
+                  <Radio.Group value={edgeTabPosition} onChange={(e) => setEdgeTabPosition(e.target.value as EdgeTabPosition)}>
+                    <Radio.Button value="top">顶部</Radio.Button>
+                    <Radio.Button value="left">左侧垂直</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>紧凑模式</Text>
+                  <Switch checked={edgeCompactMode} onChange={setEdgeCompactMode} />
+                  <Text type="secondary" style={{ fontSize: 12 }}>间距减少 30%</Text>
+                </Space>
+              </Space>
+            )}
+
+            {isFluent && (
+              <Space direction="vertical" size={8}>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>背景渐变</Text>
+                  <Radio.Group value={fluentGradient} onChange={(e) => setFluentGradient(e.target.value as FluentGradient)}>
+                    <Radio.Button value="cool">冷色渐变</Radio.Button>
+                    <Radio.Button value="warm">暖色渐变</Radio.Button>
+                    <Radio.Button value="dark">深色渐变</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space><Text style={{ width: 80, display: 'inline-block' }}>毛玻璃强度</Text>
+                  <Radio.Group value={fluentGlassStrength} onChange={(e) => setFluentGlassStrength(e.target.value as FluentGlassStrength)}>
+                    <Radio.Button value="light">轻度 12px</Radio.Button>
+                    <Radio.Button value="standard">标准 24px</Radio.Button>
+                    <Radio.Button value="heavy">重度 40px</Radio.Button>
+                  </Radio.Group>
+                </Space>
+              </Space>
             )}
           </Space>
         </Card>

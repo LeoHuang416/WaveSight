@@ -175,8 +175,71 @@ const edgeModern: ThemeDefinition = {
   antFontSize: 14,
 };
 
+/* ────── Theme 4: Fluent Glass ────── */
+const fluentGlass: ThemeDefinition = {
+  id: 'fluent-glass',
+  label: 'Fluent Glass',
+  description: '毛玻璃仪表盘 — 全屏渐变背景、悬浮 KPI 卡片、第一眼高级感',
+
+  light: {
+    bg: '#e0e7ff',
+    bgSecondary: '#ffffff',
+    textPrimary: '#0f172a',
+    textSecondary: '#475569',
+    textTertiary: '#94a3b8',
+    border: 'rgba(255,255,255,0.35)',
+    borderLight: 'rgba(255,255,255,0.2)',
+    accent: '#2563eb',
+    accentHover: '#1d4ed8',
+    accentLight: 'rgba(37,99,235,0.12)',
+  },
+  dark: {
+    bg: '#0f172a',
+    bgSecondary: '#1e293b',
+    textPrimary: '#f1f5f9',
+    textSecondary: '#94a3b8',
+    textTertiary: '#64748b',
+    border: 'rgba(255,255,255,0.08)',
+    borderLight: 'rgba(255,255,255,0.04)',
+    accent: '#60a5fa',
+    accentHover: '#93bbfd',
+    accentLight: 'rgba(96,165,250,0.15)',
+  },
+
+  sidebarWidth: 240,
+  sidebarCollapsedWidth: 64,
+  topbarHeight: 56,
+  buttonRadius: 12,
+
+  hasGlass: true,
+  hasCardShadow: true,
+  hasCardRadius: true,
+
+  fontMono: "'SF Mono', 'JetBrains Mono', 'Consolas', monospace",
+  fontSans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  antFontSize: 14,
+};
+
+/* ─── Accent Color Presets ─── */
+export interface AccentPreset {
+  id: string;
+  label: string;
+  color: string;
+}
+export const ACCENT_PRESETS: AccentPreset[] = [
+  { id: 'blue', label: '学术蓝', color: '#2563eb' },
+  { id: 'green', label: '生物绿', color: '#059669' },
+  { id: 'purple', label: '物理紫', color: '#7c3aed' },
+  { id: 'orange', label: '工程橙', color: '#d97706' },
+];
+export const DEFAULT_ACCENT = 'blue';
+
+export function getAccentColor(presetId: string): string {
+  return ACCENT_PRESETS.find((p) => p.id === presetId)?.color ?? ACCENT_PRESETS[0].color;
+}
+
 /* ─── Theme Registry ─── */
-export const THEMES: ThemeDefinition[] = [macosGlass, kimiMinimal, edgeModern];
+export const THEMES: ThemeDefinition[] = [macosGlass, kimiMinimal, edgeModern, fluentGlass];
 
 export const DEFAULT_THEME_ID = 'macos-glass';
 
