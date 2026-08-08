@@ -336,25 +336,27 @@ function simpleOption(
         if (!changed) break;
       }
 
-      // Build [x, y, z] for every grid cell and recalc zMin/zMax from actual grid
-      const surfData: number[][] = [];
+      // Build z-value matrix (yi rows, xi cols) → echarts-gl renders as proper mesh grid
+      const matrix: number[][] = [];
       let gridZMin = Infinity, gridZMax = -Infinity;
       for (let yi = 0; yi < gridSize; yi++) {
-        const yVal = +(yMin + yi * yStep).toFixed(4);
+        const row: number[] = [];
         for (let xi = 0; xi < gridSize; xi++) {
-          const xVal = +(xMin + xi * xStep).toFixed(4);
           const zVal = zGrid[yi][xi];
-          if (isNaN(zVal)) continue; // skip truly unfilled cells
-          surfData.push([xVal, yVal, +zVal.toFixed(4)]);
-          if (zVal < gridZMin) gridZMin = zVal;
-          if (zVal > gridZMax) gridZMax = zVal;
+          const z = isNaN(zVal) ? 0 : +zVal.toFixed(4);
+          row.push(z);
+          if (!isNaN(zVal)) {
+            if (zVal < gridZMin) gridZMin = zVal;
+            if (zVal > gridZMax) gridZMax = zVal;
+          }
         }
+        matrix.push(row);
       }
-      if (surfData.length < 9) return { ...base, series: [{ type: 'bar', data: [] }] };
+      if (gridZMin === Infinity) { gridZMin = 0; gridZMax = 1; }
 
       const clipMin = gridZMin + (gridZMax - gridZMin) * 0.02;
       const clipMax = gridZMax - (gridZMax - gridZMin) * 0.02;
-      // Nudge zMin down 5% so surface bottom touches (not hovers above) the X-Y plane
+      // Nudge zMin down 5% so surface bottom touches the X-Y plane
       const zAxisMin = gridZMin - (gridZMax - gridZMin) * 0.05;
 
       return {
@@ -367,15 +369,15 @@ function simpleOption(
           text: [String(clipMax.toFixed(2)), String(clipMin.toFixed(2))], textStyle: { fontSize: 10, fontFamily: 'Times New Roman' },
           itemWidth: 14, itemHeight: 200,
         },
-        xAxis3D: { type: 'value', name: sx, min: xMin, max: xMax,
+        xAxis3D: { type: 'value', name: sx, min: 0, max: gridSize - 1,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
-          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
+          axisLabel: { formatter: (v: number) => formatNumber(xMin + v * xStep, 3) },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
-        yAxis3D: { type: 'value', name: sy, min: yMin, max: yMax,
+        yAxis3D: { type: 'value', name: sy, min: 0, max: gridSize - 1,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
-          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
+          axisLabel: { formatter: (v: number) => formatNumber(yMin + v * yStep, 3) },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         zAxis3D: { type: 'value', name: sz, min: zAxisMin, max: gridZMax,
           axisLine: { lineStyle: { color: '#000' } },
@@ -391,7 +393,7 @@ function simpleOption(
         },
         series: [{
           type: 'surface',
-          data: surfData,
+          data: matrix,
           shading: 'realistic',
           realisticMaterial: { roughness: 0.3, metalness: 0.05 },
           itemStyle: { opacity: 0.95 },
