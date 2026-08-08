@@ -18,6 +18,8 @@ export default function CleaningPage() {
   const [missingMethod, setMissingMethod] = useState<'delete' | 'fill' | 'mark'>('fill');
   const [fillStrategy, setFillStrategy] = useState<'mean' | 'median' | 'custom'>('median');
   const [fillValue, setFillValue] = useState(0);
+  const [outlierHighlights, setOutlierHighlights] = useState<{ row: number; col: string; color: string }[]>([]);
+  const [outlierCount, setOutlierCount] = useState(0);
 
   const dataset = pendingDataset ?? currentDataset;
 
@@ -88,6 +90,41 @@ export default function CleaningPage() {
     setHasChanges(true);
   }, [pendingDataset, currentDataset, missingTargetCols, missingMethod, fillStrategy, fillValue]);
 
+  const handleOutliers = useCallback(() => {
+    initPending();
+    const src = pendingDataset ?? currentDataset;
+    if (!src) return;
+    const numericCols = src.columns.filter((c) => c.type === 'numeric').map((c) => c.name);
+    const highlights: { row: number; col: string; color: string }[] = [];
+    const ds = JSON.parse(JSON.stringify(src)) as Dataset;
+    for (const col of numericCols) {
+      const values = ds.rows.map((r) => Number(r[col])).filter((v) => !isNaN(v));
+      if (values.length < 4) continue;
+      const sorted = [...values].sort((a, b) => a - b);
+      const q1 = sorted[Math.floor(sorted.length * 0.25)];
+      const q3 = sorted[Math.floor(sorted.length * 0.75)];
+      const iqr = q3 - q1;
+      const lower = q1 - 1.5 * iqr;
+      const upper = q3 + 1.5 * iqr;
+      ds.rows.forEach((row, idx) => {
+        const v = Number(row[col]);
+        if (!isNaN(v) && (v < lower || v > upper)) {
+          highlights.push({ row: idx, col, color: '#fa8c16' });
+        }
+      });
+    }
+    // Mark outliers: set them to null in the dataset
+    for (const h of highlights) {
+      ds.rows[h.row][h.col] = null;
+    }
+    ds.rowCount = ds.rows.length; // unchanged but kept for consistency
+    setPendingDataset(ds);
+    setOutlierHighlights(highlights);
+    setOutlierCount(highlights.length);
+    setHasChanges(true);
+    message.info(`检测到 ${highlights.length} 个异常值 (IQR 方法)，已标记为缺失`);
+  }, [pendingDataset, currentDataset]);
+
   const missingRowCount = useMemo(() => {
     if (!dataset) return 0;
     return dataset.rows.filter((r) => Object.values(r).some((v) => v === null || v === undefined || v === '')).length;
@@ -138,8 +175,9 @@ export default function CleaningPage() {
           key: 'outliers', label: '异常值',
           children: (
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Alert type="info" message="使用 IQR 方法 (Q1 ± 1.5×IQR) 检测异常值。处理后点击预览变更。" />
-              <Button type="primary" onClick={() => { initPending(); setHasChanges(true); }}>检测并标记异常值</Button>
+              <Alert type="info" message="使用 IQR 方法 (Q1 ± 1.5×IQR) 检测异常值。异常值将被标记为缺失。" />
+              <Button type="primary" onClick={handleOutliers}>检测并标记异常值</Button>
+              {outlierCount > 0 && <Alert type="warning" message={`检测到 ${outlierCount} 个异常值，已在预览表格中高亮并标记为缺失。`} />}
             </Space>
           ),
         },
@@ -161,7 +199,7 @@ export default function CleaningPage() {
 
       <div style={{ marginTop: 16 }}>
         <Title level={5}>数据预览</Title>
-        <DataTable dataset={dataset} maxRows={10} />
+        <DataTable dataset={dataset} maxRows={10} highlightCells={outlierHighlights.length > 0 ? outlierHighlights : undefined} />
       </div>
 
       {hasChanges && <div style={{ marginTop: 16 }}>
