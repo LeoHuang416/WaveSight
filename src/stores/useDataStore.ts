@@ -29,6 +29,6 @@ export const useDataStore = create<DataState>()((set, get) => ({
   refreshDatasetList: async () => { const list = await getAllDatasets(); set({ datasetList: list }); },
   updateCurrentDataset: (ds) => set({ currentDataset: ds }),
   getColumnByName: (name) => get().currentDataset?.columns.find((c) => c.name === name),
-  getNumericColumns: () => get().currentDataset?.columns.filter((c) => c.type === 'numeric') ?? [],
-  getCategoricalColumns: () => get().currentDataset?.columns.filter((c) => c.type === 'categorical') ?? [],
+  getNumericColumns: () => get().currentDataset?.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown') ?? [],
+  getCategoricalColumns: () => get().currentDataset?.columns.filter((c) => c.type === 'categorical' && c.role !== 'metadata' && c.role !== 'unknown') ?? [],
 }));

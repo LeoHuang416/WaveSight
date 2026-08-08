@@ -24,7 +24,7 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
   const colors = colorScheme === 'grayscale' ? GRAY : undefined;
   const base: Record<string, unknown> = { title: { text: title, left: 'center' }, color: colors, backgroundColor: '#fff' };
   if (!dataset) return base;
-  const nums = dataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name);
+  const nums = dataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => c.name);
   if (nums.length === 0) return base;
   const xCol = nums[0], yCol = nums[1] ?? nums[0];
   const xData = dataset.rows.map((r) => r[xCol]).slice(0, 30);
