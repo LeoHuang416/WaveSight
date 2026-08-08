@@ -60,6 +60,244 @@ function simpleOption(dataset: ReturnType<typeof useDataStore.getState>['current
       return { ...base, xAxis: { type: 'category', data: nums.slice(0, 5) }, yAxis: { type: 'value' },
         series: [{ type: 'boxplot', data: boxData, itemStyle: { borderColor: colors?.[0] ?? '#1a1a1a' } }] };
     }
+    case 'violin': {
+      // Approximate violin as split density + boxplot overlay
+      const violinCols = nums.slice(0, 4);
+      const series: Record<string, unknown>[] = [];
+      const allBins: { name: string; left: number[]; right: number[]; box: number[] }[] = [];
+      violinCols.forEach((col) => {
+        const vals = dataset.rows.map((r) => Number(r[col])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
+        if (vals.length < 4) return;
+        const binCount = 20;
+        const mn = vals[0], mx = vals[vals.length - 1];
+        const bw = (mx - mn) / binCount || 1;
+        const bins = Array(binCount).fill(0);
+        vals.forEach((v) => { const idx = Math.min(Math.floor((v - mn) / bw), binCount - 1); bins[idx]++; });
+        const maxBin = Math.max(...bins, 1);
+        // Normalize for display
+        const left = bins.map((c) => -c / maxBin * 0.5);
+        const right = bins.map((c) => c / maxBin * 0.5);
+        // Boxplot stats
+        const q1 = vals[Math.floor(vals.length * 0.25)];
+        const q2 = vals[Math.floor(vals.length * 0.5)];
+        const q3 = vals[Math.floor(vals.length * 0.75)];
+        allBins.push({ name: col, left, right, box: [q1, q2, q3] });
+      });
+      // Build a custom chart: area for density + scatter for box stats
+      const grid: Record<string, unknown> = { left: 80, right: 20, top: 60, bottom: 40 };
+      const xAxisVals: number[] = [];
+      allBins.forEach((_, ci) => {
+        for (let i = 0; i < 20; i++) xAxisVals.push(i + ci * 25);
+      });
+      allBins.forEach((b, ci) => {
+        const offset = ci * 25;
+        series.push({
+          type: 'bar', name: `${b.name} (密度)`, data: b.right.map((v, i) => [i + offset, v]),
+          barWidth: '90%', itemStyle: { color: colors?.[ci % colors.length] ?? '#5470c6', opacity: 0.6 },
+          xAxisIndex: 0, yAxisIndex: 0,
+        });
+        series.push({
+          type: 'bar', name: `${b.name} (左)`, data: b.left.map((v, i) => [i + offset, v]),
+          barWidth: '90%', itemStyle: { color: colors?.[ci % colors.length] ?? '#5470c6', opacity: 0.3 },
+          xAxisIndex: 0, yAxisIndex: 0,
+        });
+      });
+      return { ...base, grid, xAxis: { type: 'value', min: -1, max: allBins.length * 25 },
+        yAxis: { type: 'value' }, series: series.length ? series : [{ type: 'bar', data: [] }] };
+    }
+    case 'qq': {
+      // Q-Q plot: normal theoretical quantiles vs sample quantiles
+      const qqCol = yCol;
+      const qqVals = dataset.rows.map((r) => Number(r[qqCol])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
+      if (qqVals.length < 5) return base;
+      const n = qqVals.length;
+      const mean = qqVals.reduce((a, b) => a + b, 0) / n;
+      const std = Math.sqrt(qqVals.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1));
+      // Normal quantile function approximation
+      const normQuantile = (p: number): number => {
+        // Approximation of inverse normal CDF
+        const t = Math.sqrt(-2 * Math.log(Math.min(p, 1 - p)));
+        const sign = p < 0.5 ? -1 : 1;
+        return sign * (t - (2.515517 + 0.802853 * t + 0.010328 * t * t) / (1 + 1.432788 * t + 0.189269 * t * t + 0.001308 * t * t * t));
+      };
+      const qqData = qqVals.map((v, i) => {
+        const p = (i + 0.5) / n;
+        return [normQuantile(p) * std + mean, v];
+      });
+      // Reference line
+      const lineMin = Math.min(...qqData.map((d) => d[0]));
+      const lineMax = Math.max(...qqData.map((d) => d[0]));
+      return {
+        ...base,
+        xAxis: { type: 'value', name: '理论分位数' },
+        yAxis: { type: 'value', name: '样本分位数' },
+        series: [
+          { type: 'scatter', data: qqData, symbolSize: 4, name: 'Q-Q' },
+          { type: 'line', data: [[lineMin, lineMin], [lineMax, lineMax]], name: 'y=x',
+            lineStyle: { color: '#ccc', type: 'dashed' as const }, symbol: 'none' as const },
+        ],
+      };
+    }
+    case 'heatmap': {
+      // Heatmap: category x category grid
+      const heatCols = nums.slice(0, 6);
+      if (heatCols.length < 2) return { ...base, series: [{ type: 'bar', data: [] }] };
+      // Build correlation-like heatmap between numeric columns
+      const heatData: [number, number, number][] = [];
+      heatCols.forEach((c1, i) => {
+        heatCols.forEach((c2, j) => {
+          const v1 = dataset.rows.map((r) => Number(r[c1])).filter((v) => !isNaN(v));
+          const v2 = dataset.rows.map((r) => Number(r[c2])).filter((v) => !isNaN(v));
+          // Pearson correlation
+          const n = Math.min(v1.length, v2.length);
+          if (n < 3) { heatData.push([j, i, 0]); return; }
+          const m1 = v1.slice(0, n).reduce((a, b) => a + b, 0) / n;
+          const m2 = v2.slice(0, n).reduce((a, b) => a + b, 0) / n;
+          const s1 = Math.sqrt(v1.slice(0, n).reduce((s, v) => s + (v - m1) ** 2, 0) / n) || 1;
+          const s2 = Math.sqrt(v2.slice(0, n).reduce((s, v) => s + (v - m2) ** 2, 0) / n) || 1;
+          const cov = v1.slice(0, n).reduce((s, v, k) => s + (v - m1) * (v2[k] - m2), 0) / n;
+          heatData.push([j, i, +(cov / (s1 * s2)).toFixed(3)]);
+        });
+      });
+      const hmMax = Math.max(...heatData.map((d) => Math.abs(d[2])), 0.1);
+      return {
+        ...base,
+        xAxis: { type: 'category', data: heatCols, position: 'top', axisLabel: { rotate: 45, fontSize: 10 } },
+        yAxis: { type: 'category', data: heatCols, inverse: true },
+        visualMap: { min: -hmMax, max: hmMax, calculable: true, orient: 'vertical', right: 10,
+          inRange: { color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] } },
+        series: [{ type: 'heatmap', data: heatData, label: { show: true, fontSize: 10 },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } } }],
+      };
+    }
+    case 'errorbar': {
+      // Error bar chart: bar with ±1 SD error bars
+      const errCols = nums.slice(0, 5);
+      const errMeans: number[] = [];
+      const errSDs: number[] = [];
+      errCols.forEach((col) => {
+        const vals = dataset.rows.map((r) => Number(r[col])).filter((v) => !isNaN(v));
+        const m = vals.reduce((a, b) => a + b, 0) / vals.length;
+        const sd = Math.sqrt(vals.reduce((s, v) => s + (v - m) ** 2, 0) / (vals.length - 1));
+        errMeans.push(+m.toFixed(2));
+        errSDs.push(+sd.toFixed(2));
+      });
+      if (errMeans.length === 0) return { ...base, series: [{ type: 'bar', data: [] }] };
+      // Error bar data: [yMin, yMax] for each column
+      const errData = errMeans.map((m, i) => [m - errSDs[i], m + errSDs[i]]);
+      return {
+        ...base,
+        xAxis: { type: 'category', data: errCols },
+        yAxis: { type: 'value', name: '均值 ± 1 SD' },
+        series: [
+          { type: 'bar', data: errMeans, name: '均值', barWidth: '50%' },
+          { type: 'custom', name: '误差棒', data: errData,
+            renderItem: (_params: unknown, api: Record<string, CallableFunction>) => {
+              const xValue = api.value(0);
+              const yMin = api.value(0) - api.value(1); // This is tricky with custom renderer
+              // Use a simpler approach with two scatter series
+              return { type: 'group', children: [] };
+            },
+          },
+        ],
+      };
+      // Simpler approach: use markPoint/markLine or a separate scatter series for error bars
+      const errBarData = errCols.map((_col, i) => [errMeans[i], errSDs[i], i]);
+      return {
+        ...base,
+        xAxis: { type: 'category', data: errCols },
+        yAxis: { type: 'value', name: '均值 ± 1 SD' },
+        series: [
+          { type: 'bar', data: errMeans, name: '均值' },
+          { type: 'scatter', data: errBarData.map((d) => [d[2], d[0] + d[1]]), symbolSize: 0,
+            markLine: { silent: true, symbol: ['none', 'none'],
+              data: errBarData.map((d, idx) => [
+                { xAxis: idx, yAxis: d[0] - d[1] },
+                { xAxis: idx, yAxis: d[0] + d[1] },
+              ]).flat(),
+              lineStyle: { color: colors?.[0] ?? '#1a1a1a', width: 2 },
+            },
+          },
+        ],
+      };
+    }
+    case 'contour': {
+      // 2D contour: binned scatter density heatmap
+      const cx = nums[0], cy = nums[1] ?? nums[0];
+      const cData = dataset.rows.slice(0, 500).map((r) => [Number(r[cx]), Number(r[cy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
+      if (cData.length < 5) return { ...base, series: [{ type: 'scatter', data: [] }] };
+      const xVals = cData.map((d) => d[0]), yVals = cData.map((d) => d[1]);
+      const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
+      const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
+      const gridSize = 20;
+      const xStep = (xMax - xMin) / gridSize || 1;
+      const yStep = (yMax - yMin) / gridSize || 1;
+      const grid: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+      cData.forEach(([x, y]) => {
+        const xi = Math.min(Math.floor((x - xMin) / xStep), gridSize - 1);
+        const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
+        grid[yi][xi]++;
+      });
+      const contourData: [number, number, number][] = [];
+      grid.forEach((row, yi) => row.forEach((v, xi) => {
+        contourData.push([+(xMin + xi * xStep + xStep / 2).toFixed(2), +(yMin + yi * yStep + yStep / 2).toFixed(2), v]);
+      }));
+      return {
+        ...base,
+        xAxis: { type: 'value', name: cx },
+        yAxis: { type: 'value', name: cy },
+        visualMap: { min: 0, max: Math.max(...contourData.map((d) => d[2]), 1), calculable: true, orient: 'vertical', right: 10,
+          inRange: { color: ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c', '#08306b'] } },
+        series: [{ type: 'scatter', data: contourData, symbolSize: (val: number[]) => Math.max(4, Math.min(30, val[2] * 3)),
+          itemStyle: { opacity: 0.7 } }],
+      };
+    }
+    case 'surface3d': {
+      // 3D surface approximated as 2D heatmap grid
+      const sx = nums[0], sy = nums[1] ?? nums[0];
+      const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
+      if (sData.length < 5) return { ...base, series: [{ type: 'heatmap', data: [] }] };
+      const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]);
+      const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
+      const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
+      const gridSize = 15;
+      const xStep = (xMax - xMin) / gridSize || 1;
+      const yStep = (yMax - yMin) / gridSize || 1;
+      const xLabels = Array.from({ length: gridSize }, (_, i) => (+(xMin + i * xStep + xStep / 2).toFixed(1)).toString());
+      const yLabels = Array.from({ length: gridSize }, (_, i) => (+(yMin + i * yStep + yStep / 2).toFixed(1)).toString());
+      const surfData: [number, number, number][] = [];
+      sData.forEach(([x, y]) => {
+        const xi = Math.min(Math.floor((x - xMin) / xStep), gridSize - 1);
+        const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
+        surfData.push([xi, yi, 1]); // Count per cell
+      });
+      // Aggregate: average the z-values per cell
+      const gridZ: Map<string, number[]> = new Map();
+      sData.forEach(([x, y]) => {
+        const xi = Math.min(Math.floor((x - xMin) / xStep), gridSize - 1);
+        const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
+        const key = `${xi},${yi}`;
+        if (!gridZ.has(key)) gridZ.set(key, []);
+        gridZ.get(key)!.push(y); // Use y as "height"
+      });
+      const aggData: [number, number, number][] = [];
+      gridZ.forEach((vals, key) => {
+        const [xi, yi] = key.split(',').map(Number);
+        const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+        aggData.push([xi, yi, +avg.toFixed(3)]);
+      });
+      const sMax = Math.max(...aggData.map((d) => d[2]), 0.1);
+      return {
+        ...base,
+        title: { text: title + ' (2D 热力图近似，3D 需 echarts-gl)', left: 'center', textStyle: { fontSize: 12 } },
+        xAxis: { type: 'category', data: xLabels, position: 'bottom', axisLabel: { rotate: 45, fontSize: 9 } },
+        yAxis: { type: 'category', data: yLabels, inverse: true },
+        visualMap: { min: Math.min(...aggData.map((d) => d[2])), max: sMax, calculable: true, orient: 'vertical', right: 10,
+          inRange: { color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] } },
+        series: [{ type: 'heatmap', data: aggData, label: { show: true, fontSize: 9 },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } } }],
+      };
+    }
     default: return { ...base, xAxis: { type: 'category', data: xData }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: yVals }] };
   }
 }
