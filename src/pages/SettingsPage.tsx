@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, InputNumber, Radio, Select, Switch, Button, Space, Typography, message, Modal, Input, Statistic } from 'antd';
 import { ExportOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useSettingsStore } from '@/stores/useSettingsStore';
@@ -12,8 +12,7 @@ export default function SettingsPage() {
     setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays } = useSettingsStore();
   const [stats, setStats] = useState({ datasetCount: 0, chartCount: 0, historyCount: 0 });
 
-  const loadStats = async () => setStats(await getStorageStats());
-  loadStats();
+  useEffect(() => { getStorageStats().then(setStats); }, []);
 
   const handleExport = async () => {
     const data = await exportAllData();
@@ -32,7 +31,7 @@ export default function SettingsPage() {
       ),
       onOk: async () => {
         const input = document.getElementById('confirmInput') as HTMLInputElement;
-        if (input?.value === '确认清空') { await clearAllData(); message.success('已清空'); loadStats(); }
+        if (input?.value === '确认清空') { await clearAllData(); message.success('已清空'); getStorageStats().then(setStats); }
         else { message.error('输入不匹配'); return Promise.reject(); }
       },
     });

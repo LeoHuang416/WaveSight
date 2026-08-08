@@ -96,4 +96,14 @@ describe('SettingsPage', () => {
     render(<Wrapper><SettingsPage /></Wrapper>);
     expect(screen.getByText('实验数据分析工作台 v1.0')).toBeDefined();
   });
+  it('renders without crashing and shows stats', async () => {
+    render(<Wrapper><SettingsPage /></Wrapper>);
+    // verify stats are displayed (default 0)
+    expect(screen.getByText('数据集')).toBeDefined();
+    expect(screen.getByText('图表')).toBeDefined();
+    expect(screen.getAllByText('历史记录').length).toBeGreaterThan(0);
+    // verify export and clear buttons exist
+    expect(screen.getByText('导出全部数据 (JSON)')).toBeDefined();
+    expect(screen.getByText('清空全部数据')).toBeDefined();
+  });
 });
