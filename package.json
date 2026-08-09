@@ -1,8 +1,19 @@
 {
   "name": "data-analysis-workbench",
-  "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "纯前端科研实验数据分析工作台：描述统计、假设检验、响应面分析(RSM)、主成分分析(PCA)与图表可视化，数据本地存储、无需后端。",
+  "license": "MIT",
+  "author": "Admin",
+  "keywords": [
+    "data-analysis",
+    "statistics",
+    "rsm",
+    "response-surface-methodology",
+    "pca",
+    "实验数据分析",
+    "响应面"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

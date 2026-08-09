@@ -1,2 +1,15 @@
-.superpowers/
+# 依赖
 node_modules/
+
+# 构建产物（开源仓库不入库）
+dist/
+
+# 本地工具/开发计划
+.claude/
+.superpowers/
+docs/superpowers/
+
+# 系统/日志
+*.log
+.DS_Store
+Thumbs.db
