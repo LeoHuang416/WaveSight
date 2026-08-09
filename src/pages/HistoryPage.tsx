@@ -17,7 +17,7 @@ const TYPE_LABELS: Record<AnalysisType, string> = {
   descriptive: '描述统计', frequency: '频数统计', normality: '正态性检验', 'grouped-stats': '分组统计',
   'ttest-independent': '独立样本 t 检验', 'ttest-paired': '配对 t 检验', 'anova-oneway': '单因素 ANOVA',
   correlation: '相关矩阵', 'linear-regression': '线性回归', 'nonlinear-fit': '非线性拟合',
-  rsm: '响应面分析', pca: '主成分分析',
+  rsm: '响应面分析', pca: '主成分分析', pipeline: '全流程分析',
 };
 
 export default function HistoryPage() {

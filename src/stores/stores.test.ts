@@ -74,13 +74,13 @@ describe('useDataStore', () => {
     expect(useDataStore.getState().currentDataset).toBeNull();
   });
   it('loads a dataset by id', async () => {
-    const ds: Dataset = { id: 'test-1', name: 'test', fileName: 't.csv', columns: [{ name: 'x', type: 'numeric', index: 0 }], rows: [{ x: 1 }], rowCount: 1, colCount: 1, importedAt: Date.now() };
+    const ds: Dataset = { id: 'test-1', name: 'test', fileName: 't.csv', columns: [{ name: 'x', type: 'numeric', role: 'independent', index: 0 }], rows: [{ x: 1 }], rowCount: 1, colCount: 1, importedAt: Date.now() };
     await saveDataset(ds);
     await useDataStore.getState().setCurrentDataset('test-1');
     expect(useDataStore.getState().currentDataset?.name).toBe('test');
   });
   it('getNumericColumns returns numeric columns', async () => {
-    const ds: Dataset = { id: 'test-2', name: 'test', fileName: 't.csv', columns: [{ name: 'x', type: 'numeric', index: 0 }, { name: 'cat', type: 'categorical', index: 1 }], rows: [{ x: 1, cat: 'A' }], rowCount: 1, colCount: 2, importedAt: Date.now() };
+    const ds: Dataset = { id: 'test-2', name: 'test', fileName: 't.csv', columns: [{ name: 'x', type: 'numeric', role: 'independent', index: 0 }, { name: 'cat', type: 'categorical', role: 'independent', index: 1 }], rows: [{ x: 1, cat: 'A' }], rowCount: 1, colCount: 2, importedAt: Date.now() };
     await saveDataset(ds);
     await useDataStore.getState().setCurrentDataset('test-2');
     expect(useDataStore.getState().getNumericColumns()).toHaveLength(1);

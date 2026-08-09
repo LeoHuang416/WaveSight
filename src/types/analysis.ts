@@ -10,7 +10,8 @@ export type AnalysisType =
   | 'linear-regression'
   | 'nonlinear-fit'
   | 'rsm'
-  | 'pca';
+  | 'pca'
+  | 'pipeline';
 
 export interface AnalysisConfig {
   type: AnalysisType;

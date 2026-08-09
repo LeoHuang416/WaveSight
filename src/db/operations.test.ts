@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './index';
-import { saveDataset, getDataset, getAllDatasets, deleteDataset, getStorageStats, clearAllData } from './operations';
+import { saveDataset, getDataset, getAllDatasets, deleteDataset, getStorageStats, clearAllData, saveChart, getAllCharts, saveHistory, getAllHistory } from './operations';
 import type { Dataset } from '@/types/data';
+import type { ChartConfig } from '@/types/chart';
+import type { HistoryRecord } from '@/types/history';
 
 const makeDataset = (id: string): Dataset => ({
   id, name: `test-${id}`, fileName: 'test.csv',
-  columns: [{ name: 'x', type: 'numeric', index: 0 }],
+  columns: [{ name: 'x', type: 'numeric', role: 'unknown', index: 0 }],
   rows: [{ x: 1 }, { x: 2 }], rowCount: 2, colCount: 1,
   importedAt: Date.now(),
 });
@@ -59,5 +61,37 @@ describe('Dataset CRUD', () => {
     await clearAllData();
     const stats = await getStorageStats();
     expect(stats.datasetCount).toBe(0);
+  });
+});
+
+describe('chart/history persistence (function stripping)', () => {
+  beforeEach(async () => { await db.charts.clear(); await db.history.clear(); });
+
+  const fnChart = (): ChartConfig => ({
+    id: 'c1', title: 't', chartType: 'contour', datasetId: 'd', columnMapping: {},
+    echartsOption: { series: [{ type: 'custom', renderItem: () => ({}) }, { type: 'line', data: [[0, 1]] }] },
+    colorScheme: 'grayscale', legendPosition: 'right', fontSize: 12, xAxisLabel: '', yAxisLabel: '', createdAt: 1,
+  });
+
+  it('saves a chart whose option contains a renderItem function (no DataCloneError)', async () => {
+    await expect(saveChart(fnChart())).resolves.toBe('c1');
+    const all = await getAllCharts();
+    expect(all).toHaveLength(1);
+    const series = (all[0].echartsOption.series as Record<string, unknown>[]);
+    expect(series[0].type).toBe('custom');
+    expect((series[0] as { renderItem?: unknown }).renderItem).toBeUndefined(); // 函数被剥离
+    expect(series[1].data).toEqual([[0, 1]]); // 数据保留
+  });
+
+  it('saves a history record whose result contains function-based chart options', async () => {
+    const rec: HistoryRecord = {
+      id: 'h1', datasetName: 'd', note: '', relatedChartIds: [], createdAt: 1,
+      analysisConfig: { datasetId: 'd', analysisType: 'rsm' } as never,
+      result: { chartData: [{ chartType: 'surface3d', title: '3D', data: { series: [{ type: 'surface', data: [] }], visualMap: {} } }] } as never,
+    };
+    await expect(saveHistory(rec)).resolves.toBe('h1');
+    const all = await getAllHistory();
+    expect(all).toHaveLength(1);
+    expect(all[0].result).toBeDefined();
   });
 });

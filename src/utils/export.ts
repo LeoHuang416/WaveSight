@@ -1,6 +1,14 @@
-/** Export ECharts instance as PNG via data URL download */
+/**
+ * Export ECharts instance as PNG via data URL download.
+ *
+ * echarts-gl (3D) renders to a WebGL canvas that must be preserved at capture
+ * time — force a synchronous re-render so `getDataURL` reads the current frame
+ * instead of a cleared/blank buffer (P0-2).
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function exportPNG(chartInstance: any, filename: string) {
+  const zr = chartInstance?.getZr?.();
+  try { zr?.refreshImmediately?.(); } catch { /* non-gl or unsupported */ }
   const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
   downloadURL(url, `${filename}.png`);
 }

@@ -283,7 +283,7 @@ export async function loadFullFile(
         delimiter: delim,
         skipEmptyLines: true,
         dynamicTyping: false,
-        chunk: (results, parser) => {
+        chunk: (results: { data: unknown[] }, parser: { abort: () => void }) => {
           const data = results.data as Record<string, unknown>[];
           if (!headerRowConsumed) {
             // First chunk: extract headers if needed
@@ -330,7 +330,7 @@ export async function loadFullFile(
           onProgress?.({ phase: 'saving', loaded: skippedRows.length, total: skippedRows.length });
           resolve({ headers, rows: skippedRows, columns: inferAllColumnTypes(headers, skippedRows) });
         },
-        error: (err) => {
+        error: (err: { message: string }) => {
           reject(new Error(`文件解析失败: ${err.message}`));
         },
       });

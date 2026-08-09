@@ -7,6 +7,7 @@ import { useChartStore } from '@/stores/useChartStore';
 import { useDataStore } from '@/stores/useDataStore';
 import { exportPNG, exportCSV } from '@/utils/export';
 import { generateId, formatNumber } from '@/utils/format';
+import { buildContourOption } from '@/engine/rsmCharts';
 import type { ChartConfig, ChartType, ColorScheme } from '@/types/chart';
 
 const { Title, Text } = Typography;
@@ -19,6 +20,7 @@ const CHART_LABELS: Record<ChartType, string> = {
 };
 
 const GRAY = ['#1a1a1a', '#4d4d4d', '#808080', '#b3b3b3', '#d9d9d9', '#f0f0f0'];
+const COLOR = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
 
 function simpleOption(
   dataset: ReturnType<typeof useDataStore.getState>['currentDataset'],
@@ -27,7 +29,7 @@ function simpleOption(
   colorScheme: ColorScheme,
   columnMapping?: Record<string, string>,
 ): Record<string, unknown> {
-  const colors = colorScheme === 'grayscale' ? GRAY : undefined;
+  const colors = colorScheme === 'grayscale' ? GRAY : COLOR;
   const base: Record<string, unknown> = { title: { text: title, left: 'center' }, color: colors, backgroundColor: '#fff' };
   if (!dataset) return base;
   const nums = dataset.columns.filter((c) => {
@@ -238,51 +240,85 @@ function simpleOption(
       };
     }
     case 'contour': {
-      // 2D contour: binned heatmap with proper centering
-      const cx = nums[0], cy = nums[1] ?? nums[0];
-      const cData = dataset.rows.slice(0, 500).map((r) => [Number(r[cx]), Number(r[cy])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
+      // True RSM contour: 2D filled contour via polynomial fit + dense grid prediction + scatter overlay
+      // Normalize columnMapping — values may be string or string[] (defensive)
+      const getCol = (key: string, fallback: string): string => {
+        const v = columnMapping?.[key];
+        if (Array.isArray(v)) return String(v[0] || fallback);
+        return (typeof v === 'string' && v.trim()) ? v.trim() : fallback;
+      };
+      const cx = getCol('xCol', nums[0]);
+      const cy = getCol('yCol', nums[1] || nums[0]);
+      const cz = getCol('zCol', nums[2] || nums[1] || nums[0]);
+      if (cx === cy) return { ...base, title: { text: '错误：X轴和Y轴不能是同一变量', left: 'center', textStyle: { color: '#cf1322' } }, series: [{ type: 'scatter', data: [] }] };
+      const cData = dataset.rows.slice(0, 500).map((r) => [Number(r[cx]), Number(r[cy]), Number(r[cz])] as [number, number, number]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]) && !isNaN(v[2]));
       if (cData.length < 5) return { ...base, series: [{ type: 'scatter', data: [] }] };
-      const xVals = cData.map((d) => d[0]), yVals = cData.map((d) => d[1]);
+      const xVals = cData.map((d) => d[0]), yVals = cData.map((d) => d[1]), zVals = cData.map((d) => d[2]);
       const xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       const yMin = Math.min(...yVals), yMax = Math.max(...yVals);
-      const gridSize = 30;
-      const xStep = (xMax - xMin) / gridSize || 1;
-      const yStep = (yMax - yMin) / gridSize || 1;
-      const grid: number[][] = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
-      cData.forEach(([x, y]) => {
-        const xi = Math.min(Math.floor((x - xMin) / xStep), gridSize - 1);
-        const yi = Math.min(Math.floor((y - yMin) / yStep), gridSize - 1);
-        grid[yi][xi]++;
+      const n = cData.length;
+
+      // 2nd-order polynomial: z = b0 + b1*x + b2*y + b3*x² + b4*y² + b5*xy
+      // Inline Gaussian elimination (modeling.ts internals not exported)
+      const p = 6;
+      const XtX: number[][] = Array.from({ length: p }, () => Array(p).fill(0));
+      const Xtz: number[] = Array(p).fill(0);
+      for (let k = 0; k < n; k++) {
+        const row = [1, cData[k][0], cData[k][1], cData[k][0] ** 2, cData[k][1] ** 2, cData[k][0] * cData[k][1]];
+        for (let i = 0; i < p; i++) {
+          for (let j = 0; j < p; j++) XtX[i][j] += row[i] * row[j];
+          Xtz[i] += row[i] * cData[k][2];
+        }
+      }
+      const aug = XtX.map((row, i) => [...row, Xtz[i]]);
+      for (let i = 0; i < p; i++) {
+        let maxRow = i;
+        for (let j = i + 1; j < p; j++) if (Math.abs(aug[j][i]) > Math.abs(aug[maxRow][i])) maxRow = j;
+        [aug[i], aug[maxRow]] = [aug[maxRow], aug[i]];
+        if (Math.abs(aug[i][i]) < 1e-12) continue;
+        for (let j = i + 1; j < p; j++) {
+          const factor = aug[j][i] / aug[i][i];
+          for (let k = i; k <= p; k++) aug[j][k] -= factor * aug[i][k];
+        }
+      }
+      const beta: number[] = Array(p).fill(0);
+      for (let i = p - 1; i >= 0; i--) {
+        beta[i] = Math.abs(aug[i][i]) < 1e-12 ? 0 : (aug[i][p] - aug[i].slice(i + 1, p).reduce((s, v, j) => s + v * beta[i + 1 + j], 0)) / aug[i][i];
+      }
+      const predictZ = (x: number, y: number) => beta[0] + beta[1] * x + beta[2] * y + beta[3] * x * x + beta[4] * y * y + beta[5] * x * y;
+
+      // R²
+      const zMean = zVals.reduce((a, b) => a + b, 0) / n;
+      const ssTot = zVals.reduce((s, zi) => s + (zi - zMean) ** 2, 0);
+      const ssRes = cData.reduce((s, d) => { const e = d[2] - predictZ(d[0], d[1]); return s + e * e; }, 0);
+      const r2 = 1 - ssRes / ssTot;
+
+      // Dense prediction grid → 2D 数组；复用通用等高线构建器（真实等值线 + 数值标注 + 预测范围色标）
+      const gridN = 60;
+      const xStep = (xMax - xMin) / (gridN - 1) || 1;
+      const yStep = (yMax - yMin) / (gridN - 1) || 1;
+      const zGrid: number[][] = Array.from({ length: gridN }, () => Array(gridN).fill(NaN));
+      for (let yi = 0; yi < gridN; yi++) {
+        const yVal = yMin + yi * yStep;
+        for (let xi = 0; xi < gridN; xi++) zGrid[yi][xi] = predictZ(xMin + xi * xStep, yVal);
+      }
+      return buildContourOption({
+        zGrid, xMin, xMax, yMin, yMax, xStep, yStep,
+        cx, cy, responseCol: cz,
+        points: cData.map((d) => [d[0], d[1]]),
+        title: `${title}  [R²=${r2.toFixed(3)}]`,
       });
-      const xLabels = Array.from({ length: gridSize }, (_, i) => +(xMin + i * xStep + xStep / 2).toFixed(2));
-      const yLabels = Array.from({ length: gridSize }, (_, i) => +(yMin + i * yStep + yStep / 2).toFixed(2));
-      const contourHeatData: [number, number, number][] = [];
-      grid.forEach((row, yi) => row.forEach((v, xi) => {
-        if (v > 0) contourHeatData.push([xi, yi, v]);
-      }));
-      const cMax = Math.max(...contourHeatData.map((d) => d[2]), 1);
-      return {
-        ...base, backgroundColor: '#ffffff',
-        grid: { left: 70, right: 80, top: 50, bottom: 60 },
-        xAxis: { type: 'category', data: xLabels, name: cx, nameLocation: 'center', nameGap: 30,
-          axisLine: { lineStyle: { color: '#000', width: 1 } },
-          axisTick: { show: true, alignWithLabel: true },
-          axisLabel: { rotate: 45, fontSize: 10, interval: Math.max(0, Math.floor(gridSize / 8) - 1) } },
-        yAxis: { type: 'category', data: yLabels, name: cy, nameLocation: 'center', nameGap: 40,
-          axisLine: { lineStyle: { color: '#000', width: 1 } },
-          axisLabel: { fontSize: 10, interval: Math.max(0, Math.floor(gridSize / 8) - 1) } },
-        visualMap: { min: 0, max: cMax, calculable: true, orient: 'vertical', right: 10, top: 'center',
-          inRange: { color: ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c'] },
-          text: ['高', '低'], textStyle: { fontSize: 10 } },
-        series: [{ type: 'heatmap', data: contourHeatData,
-          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } } }],
-      };
     }
     case 'surface3d': {
       // 3D surface: X/Y form the plane, Z is the response height.
-      const sx = columnMapping?.xCol || nums[0];
-      const sy = columnMapping?.yCol || nums[1] || nums[0];
-      const sz = columnMapping?.zCol || nums[2] || nums[1] || nums[0];
+      const getCol3d = (key: string, fallback: string): string => {
+        const v = columnMapping?.[key];
+        if (Array.isArray(v)) return String(v[0] || fallback);
+        return (typeof v === 'string' && v.trim()) ? v.trim() : fallback;
+      };
+      const sx = getCol3d('xCol', nums[0]);
+      const sy = getCol3d('yCol', nums[1] || nums[0]);
+      const sz = getCol3d('zCol', nums[2] || nums[1] || nums[0]);
       const sData = dataset.rows.slice(0, 500).map((r) => [Number(r[sx]), Number(r[sy]), Number(r[sz])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]) && !isNaN(v[2]));
       if (sData.length < 5) return { ...base, series: [{ type: 'bar', data: [] }] };
       const xVals = sData.map((d) => d[0]), yVals = sData.map((d) => d[1]);
@@ -335,12 +371,11 @@ function simpleOption(
         if (!changed) break;
       }
 
-      // Build structured 2D grid: rows = y, cols = x. Each inner cell is [x, y, z].
-      // echarts-gl detects the row×col structure and builds a proper mesh — no triangulation.
-      const surfGrid: number[][][] = [];
+      // Build flat Row-Major array: y outer loop, x inner loop.
+      // echarts-gl surface requires flat [x,y,z] triples, not nested arrays.
+      const surfData: number[][] = [];
       let gridZMin = Infinity, gridZMax = -Infinity;
       for (let yi = 0; yi < gridSize; yi++) {
-        const row: number[][] = [];
         const yVal = yMin + yi * yStep;
         for (let xi = 0; xi < gridSize; xi++) {
           const zVal = zGrid[yi][xi];
@@ -348,14 +383,11 @@ function simpleOption(
             if (zVal < gridZMin) gridZMin = zVal;
             if (zVal > gridZMax) gridZMax = zVal;
           }
-          row.push([xMin + xi * xStep, yVal, isNaN(zVal) ? 0 : zVal]);
+          surfData.push([xMin + xi * xStep, yVal, isNaN(zVal) ? 0 : zVal]);
         }
-        surfGrid.push(row);
       }
       if (gridZMin === Infinity) { gridZMin = 0; gridZMax = 1; }
 
-      const clipMin = gridZMin + (gridZMax - gridZMin) * 0.02;
-      const clipMax = gridZMax - (gridZMax - gridZMin) * 0.02;
       const zAxisMin = gridZMin - (gridZMax - gridZMin) * 0.05;
 
       return {
@@ -363,25 +395,26 @@ function simpleOption(
         backgroundColor: '#ffffff',
         title: { text: title, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
         tooltip: {},
-        visualMap: { min: +clipMin.toFixed(3), max: +clipMax.toFixed(3), calculable: true, orient: 'vertical', right: 15, top: 60, bottom: 40,
+        // 色标范围 = 曲面实际范围（与 RSM 3D 曲面一致，去掉 2% 裁剪避免误导）
+        visualMap: { min: +gridZMin.toFixed(3), max: +gridZMax.toFixed(3), calculable: true, orient: 'vertical', right: 15, top: 60, bottom: 40,
           inRange: { color: ['#440154', '#482878', '#3e4989', '#31688e', '#26828e', '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'] },
-          text: [String(clipMax.toFixed(2)), String(clipMin.toFixed(2))], textStyle: { fontSize: 10, fontFamily: 'Times New Roman' },
+          text: [String(gridZMax.toFixed(1)), String(gridZMin.toFixed(1))], textStyle: { fontSize: 10, fontFamily: 'Times New Roman' },
           itemWidth: 14, itemHeight: 200,
         },
-        xAxis3D: { type: 'value', name: sx, min: xMin, max: xMax,
+        xAxis3D: { type: 'value', name: sx, min: xMin, max: xMax, splitNumber: 4,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
-          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3), hideOverlap: true },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
-        yAxis3D: { type: 'value', name: sy, min: yMin, max: yMax,
+        yAxis3D: { type: 'value', name: sy, min: yMin, max: yMax, splitNumber: 4,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
-          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3), hideOverlap: true },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
-        zAxis3D: { type: 'value', name: sz, min: zAxisMin, max: gridZMax,
+        zAxis3D: { type: 'value', name: sz, min: zAxisMin, max: gridZMax, splitNumber: 3,
           axisLine: { lineStyle: { color: '#000' } },
           splitLine: { lineStyle: { color: '#e0e0e0' } },
-          axisLabel: { formatter: (v: number) => formatNumber(v, 3) },
+          axisLabel: { formatter: (v: number) => formatNumber(v, 3), hideOverlap: true },
           nameTextStyle: { fontSize: 12, fontFamily: 'Times New Roman' } },
         grid3D: {
           environment: '#ffffff',
@@ -392,7 +425,7 @@ function simpleOption(
         },
         series: [{
           type: 'surface',
-          data: surfGrid,
+          data: surfData,
           shading: 'realistic',
           realisticMaterial: { roughness: 0.3, metalness: 0.05 },
           itemStyle: { opacity: 0.95 },
@@ -411,6 +444,15 @@ export default function ChartsPage() {
   const [typeFilter, setTypeFilter] = useState<ChartType | 'all'>('all');
   const [echartsRef, setEchartsRef] = useState<ReactECharts | null>(null);
   const filtered = charts.filter((c) => (!search || c.title.includes(search)) && (typeFilter === 'all' || c.chartType === typeFilter));
+  // 函数型 option（renderItem/formatter）无法持久化（存储时被剥离），读取时用图表配置重建
+  const renderOption = (c: ChartConfig): Record<string, unknown> => {
+    const needs = c.chartType === 'contour' || c.chartType === 'surface3d' || c.chartType === 'errorbar';
+    if (needs && !c.sourceAnalysisId && currentDataset && c.datasetId === currentDataset.id) {
+      try { return simpleOption(currentDataset, c.chartType, c.title, c.colorScheme, c.columnMapping as Record<string, string>); }
+      catch { /* 重建失败则回退到存储的剥离版 option */ }
+    }
+    return c.echartsOption;
+  };
 
   const handleNew = () => {
     if (!currentDataset) { message.warning('请先导入数据'); return; }
@@ -431,7 +473,7 @@ export default function ChartsPage() {
         <div style={{ flex: 1 }}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => setViewMode('gallery')}>← 返回画廊</Button>
           <div className="glass-card" style={{ marginTop: 8, padding: 16, background: 'rgba(255,255,255,0.4)' }}>
-            <ReactECharts ref={(e) => setEchartsRef(e as ReactECharts)} option={chart.echartsOption} style={{ height: 400, background: '#fff' }} notMerge />
+            <ReactECharts ref={(e) => setEchartsRef(e as ReactECharts)} option={renderOption(chart)} style={{ height: 400, background: '#fff' }} notMerge />
           </div>
         </div>
         <div style={{ width: 220 }}>
@@ -439,14 +481,14 @@ export default function ChartsPage() {
             <Space direction="vertical" style={{ width: '100%' }}>
               <Input addonBefore="标题" value={chart.title} onChange={(e) => addChart({ ...chart, title: e.target.value, echartsOption: { ...chart.echartsOption as Record<string, unknown>, title: { text: e.target.value, left: 'center' } } })} />
               <Select value={chart.chartType} style={{ width: '100%' }} onChange={(v: ChartType) => addChart({ ...chart, chartType: v, echartsOption: simpleOption(currentDataset, v, chart.title, chart.colorScheme, chart.columnMapping as Record<string, string>) })} options={Object.entries(CHART_LABELS).map(([k, v]) => ({ label: v, value: k }))} />
-              {chart.chartType === 'surface3d' && currentDataset && (
+              {(chart.chartType === 'surface3d' || chart.chartType === 'contour') && currentDataset && (
                 <>
                   <Space style={{ width: '100%' }} direction="vertical" size={4}>
                     <Text style={{ fontSize: 12 }}>X 轴变量</Text>
                     <Select size="small" style={{ width: '100%' }} value={(chart.columnMapping as Record<string, string>)?.xCol ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[0]}
                       onChange={(v) => {
                         const cm = { ...chart.columnMapping as Record<string, string>, xCol: v };
-                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, 'surface3d', chart.title, chart.colorScheme, cm) });
+                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, chart.chartType, chart.title, chart.colorScheme, cm) });
                       }}
                       options={currentDataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => ({ label: c.name, value: c.name }))} />
                   </Space>
@@ -455,7 +497,7 @@ export default function ChartsPage() {
                     <Select size="small" style={{ width: '100%' }} value={(chart.columnMapping as Record<string, string>)?.yCol ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[1] ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[0]}
                       onChange={(v) => {
                         const cm = { ...chart.columnMapping as Record<string, string>, yCol: v };
-                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, 'surface3d', chart.title, chart.colorScheme, cm) });
+                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, chart.chartType, chart.title, chart.colorScheme, cm) });
                       }}
                       options={currentDataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => ({ label: c.name, value: c.name }))} />
                   </Space>
@@ -464,7 +506,7 @@ export default function ChartsPage() {
                     <Select size="small" style={{ width: '100%' }} value={(chart.columnMapping as Record<string, string>)?.zCol ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[2] ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[1] ?? currentDataset.columns.filter((c) => c.type === 'numeric').map((c) => c.name)[0]}
                       onChange={(v) => {
                         const cm = { ...chart.columnMapping as Record<string, string>, zCol: v };
-                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, 'surface3d', chart.title, chart.colorScheme, cm) });
+                        addChart({ ...chart, columnMapping: cm, echartsOption: simpleOption(currentDataset, chart.chartType, chart.title, chart.colorScheme, cm) });
                       }}
                       options={currentDataset.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => ({ label: c.name, value: c.name }))} />
                   </Space>
@@ -492,7 +534,7 @@ export default function ChartsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
             {filtered.map((c) => (
               <Card key={c.id} className="glass-card" hoverable size="small" bodyStyle={{ padding: '16px' }} onClick={() => setEditingChart(c.id)}
-                cover={<div style={{ height: 140, overflow: 'hidden' }}><ReactECharts option={c.echartsOption} style={{ height: 140 }} notMerge /></div>}>
+                cover={<div style={{ height: 140, overflow: 'hidden' }}><ReactECharts option={renderOption(c)} style={{ height: 140 }} notMerge /></div>}>
                 <Card.Meta title={c.title} description={<><Tag>{CHART_LABELS[c.chartType]}</Tag><Text type="secondary" style={{ fontSize: 11 }}>{new Date(c.createdAt).toLocaleString('zh-CN')}</Text></>} />
               </Card>
             ))}
