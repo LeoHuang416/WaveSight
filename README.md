@@ -4,6 +4,8 @@
 
 A client-side statistical data analysis workbench for experimental research. All data stays in your browser (IndexedDB) — no backend, works offline. UI is in Chinese.
 
+**在线体验 / Live Demo**: <https://LeoHuang416.github.io/WaveSight/>
+
 ## 功能特性 / Features
 
 - **数据导入 / Import**：Excel（.xlsx）、CSV，自动列类型推断
