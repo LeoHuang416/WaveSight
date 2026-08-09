@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WaveSight 数据分析</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>WaveSight 数据分析</h1>
+      <p class="help">输入数字（支持逗号、空格、分号或换行分隔），点击分析。</p>
+      <textarea id="numbers" placeholder="例如：1, 2, 3; 4 5"></textarea>
+      <button id="analyzeBtn" type="button">开始分析</button>
+      <section id="result" aria-live="polite">结果将显示在这里。</section>
+    </main>
+
+    <script src="analysis.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
