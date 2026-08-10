@@ -1,57 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Layout } from 'antd';
-import Sidebar from './Sidebar';
-import TopBar from './TopBar';
-import Footer from './Footer';
-import { useSettingsStore } from '@/stores/useSettingsStore';
-import { getTheme } from '@/themes';
-
-const { Sider, Content } = Layout;
+import Sidebar, { MobileHeader } from './Sidebar';
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
-  const uiTheme = useSettingsStore((s) => s.uiTheme);
-  const t = getTheme(uiTheme);
-  const th = t.topbarHeight;
+
+  // React-router HashRouter: jump to top on navigation
+  useEffect(() => {
+    if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+  }, []);
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
-      <TopBar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
-      <Layout style={{ background: 'transparent', marginTop: th }}>
-        <Sider
-          id="app-sidebar"
-          width={t.sidebarWidth}
-          collapsedWidth={t.sidebarCollapsedWidth}
-          collapsible
-          collapsed={collapsed}
-          trigger={null}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            height: `calc(100vh - ${th}px)`,
-            position: 'fixed',
-            left: 0,
-            top: th,
-            zIndex: 100,
-          }}
-        >
-          <Sidebar collapsed={collapsed} />
-        </Sider>
-        <Content
-          style={{
-            marginLeft: collapsed ? t.sidebarCollapsedWidth : t.sidebarWidth,
-            transition: 'margin-left 0.2s ease-in-out',
-            background: 'transparent',
-            minHeight: `calc(100vh - ${th}px - 32px)`,
-          }}
-        >
-          <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 24px 0' }}>
-            <Outlet />
-          </div>
-        </Content>
-      </Layout>
-      <Footer collapsed={collapsed} />
-    </Layout>
+    <div className="min-h-screen bg-[#0a0a1a] text-slate-200">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 -right-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-pink-500/5 rounded-full blur-3xl" />
+        <div className="absolute inset-0 bg-grid opacity-50" />
+      </div>
+
+      {/* Desktop sidebar */}
+      <div className="hidden lg:block">
+        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      </div>
+
+      {/* Mobile header */}
+      <MobileHeader />
+
+      {/* Main content */}
+      <main
+        className={`transition-all duration-300 min-h-screen ${
+          collapsed ? 'lg:ml-16' : 'lg:ml-56'
+        }`}
+      >
+        <div className="lg:pt-0 pt-14">
+          <Outlet />
+        </div>
+      </main>
+    </div>
   );
 }

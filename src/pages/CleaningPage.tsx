@@ -1,35 +1,34 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Tabs, Select, Radio, InputNumber, Input, Button, Space, Typography, Alert, message } from 'antd';
+import { message } from 'antd';
+import { Sparkles, Eye, Play, RotateCcw, Settings2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import PageHeader from '@/components/layout/PageHeader';
 import { useDataStore } from '@/stores/useDataStore';
 import { useDataOperations } from '@/hooks/useDataOperations';
 import DataTable from '@/components/data/DataTable';
 import EmptyState from '@/components/common/EmptyState';
 import type { Dataset } from '@/types/data';
 
-const { Title, Text } = Typography;
+type Tab = 'missing' | 'outlier' | 'columns';
 
 export default function CleaningPage() {
-  const { currentDataset, updateCurrentDataset } = useDataStore();
+  const { currentDataset, datasetList, setCurrentDataset, updateCurrentDataset } = useDataStore();
   const { updateDataset } = useDataOperations();
+  const [tab, setTab] = useState<Tab>('missing');
   const [pendingDataset, setPendingDataset] = useState<Dataset | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const [missingTargetCols, setMissingTargetCols] = useState<string[]>(['__all_numeric__']);
-  const [missingMethod, setMissingMethod] = useState<'delete' | 'fill' | 'mark'>('fill');
+  const [missingMethod, setMissingMethod] = useState<'delete' | 'fill'>('fill');
   const [fillStrategy, setFillStrategy] = useState<'mean' | 'median' | 'custom'>('median');
   const [fillValue, setFillValue] = useState(0);
+  const [targetCols, setTargetCols] = useState<string[]>(['__all_numeric__']);
   const [outlierHighlights, setOutlierHighlights] = useState<{ row: number; col: string; color: string }[]>([]);
   const [outlierCount, setOutlierCount] = useState(0);
 
   const dataset = pendingDataset ?? currentDataset;
 
   const initPending = () => {
-    if (currentDataset && !pendingDataset) {
-      setPendingDataset(JSON.parse(JSON.stringify(currentDataset)));
-    }
+    if (currentDataset && !pendingDataset) setPendingDataset(JSON.parse(JSON.stringify(currentDataset)));
   };
-
-  const resetChanges = () => { setPendingDataset(null); setHasChanges(false); };
 
   const applyChanges = async () => {
     if (!pendingDataset) return;
@@ -38,38 +37,39 @@ export default function CleaningPage() {
     message.success('更改已应用');
   };
 
-  const renameColumn = useCallback((oldName: string, newName: string) => {
-    const src = pendingDataset ?? currentDataset;
-    if (!src || !newName || oldName === newName) return;
-    const ds = JSON.parse(JSON.stringify(src)) as Dataset;
-    const targetCol = ds.columns.find((c) => c.name === oldName);
-    if (targetCol) targetCol.name = newName;
-    ds.rows = ds.rows.map((row) => {
-      if (oldName in row) {
-        const newRow = { ...row, [newName]: row[oldName] };
-        delete newRow[oldName];
-        return newRow;
-      }
-      return row;
+  const resetChanges = () => { setPendingDataset(null); setHasChanges(false); };
+
+  const missingCounts = useMemo(() => {
+    if (!dataset) return new Map<string, number>();
+    const counts = new Map<string, number>();
+    dataset.columns.forEach((c) => counts.set(c.name, 0));
+    dataset.rows.forEach((row) => {
+      dataset.columns.forEach((c) => {
+        const v = row[c.name];
+        if (v === null || v === undefined || v === '') counts.set(c.name, (counts.get(c.name) ?? 0) + 1);
+      });
     });
-    setPendingDataset(ds);
-    setHasChanges(true);
-  }, [pendingDataset, currentDataset]);
+    return counts;
+  }, [dataset]);
+
+  const missingRowCount = useMemo(() => {
+    if (!dataset) return 0;
+    return dataset.rows.filter((r) => Object.values(r).some((v) => v === null || v === undefined || v === '')).length;
+  }, [dataset]);
 
   const handleMissingValues = useCallback(() => {
     initPending();
     if (!pendingDataset && !currentDataset) return;
     const src = pendingDataset ?? currentDataset!;
     const ds = JSON.parse(JSON.stringify(src)) as Dataset;
-    const targetCols = missingTargetCols.includes('__all_numeric__')
+    const cols = targetCols.includes('__all_numeric__')
       ? ds.columns.filter((c) => c.type === 'numeric').map((c) => c.name)
-      : missingTargetCols;
+      : targetCols;
 
     if (missingMethod === 'delete') {
-      ds.rows = ds.rows.filter((row) =>
-        targetCols.every((col) => row[col] !== null && row[col] !== undefined && row[col] !== ''));
-    } else if (missingMethod === 'fill') {
-      for (const col of targetCols) {
+      ds.rows = ds.rows.filter((row) => cols.every((col) => row[col] !== null && row[col] !== undefined && row[col] !== ''));
+    } else {
+      for (const col of cols) {
         const values = ds.rows.map((r) => Number(r[col])).filter((v) => !isNaN(v));
         if (values.length === 0) continue;
         let replacement: number;
@@ -87,7 +87,8 @@ export default function CleaningPage() {
     ds.rowCount = ds.rows.length;
     setPendingDataset(ds);
     setHasChanges(true);
-  }, [pendingDataset, currentDataset, missingTargetCols, missingMethod, fillStrategy, fillValue]);
+    message.success(missingMethod === 'delete' ? `已删除 ${src.rowCount - ds.rows.length} 行含缺失值的记录` : '缺失值填充完成');
+  }, [pendingDataset, currentDataset, missingMethod, fillStrategy, fillValue, targetCols]);
 
   const handleOutliers = useCallback(() => {
     initPending();
@@ -107,9 +108,7 @@ export default function CleaningPage() {
       const upper = q3 + 1.5 * iqr;
       ds.rows.forEach((row, idx) => {
         const v = Number(row[col]);
-        if (!isNaN(v) && (v < lower || v > upper)) {
-          highlights.push({ row: idx, col, color: '#fa8c16' });
-        }
+        if (!isNaN(v) && (v < lower || v > upper)) highlights.push({ row: idx, col, color: '#f97316' });
       });
     }
     for (const h of highlights) ds.rows[h.row][h.col] = null;
@@ -121,96 +120,212 @@ export default function CleaningPage() {
     message.info(`检测到 ${highlights.length} 个异常值 (IQR 方法)，已标记为缺失`);
   }, [pendingDataset, currentDataset]);
 
-  const missingRowCount = useMemo(() => {
-    if (!dataset) return 0;
-    return dataset.rows.filter((r) => Object.values(r).some((v) => v === null || v === undefined || v === '')).length;
-  }, [dataset]);
+  const renameColumn = useCallback((oldName: string, newName: string) => {
+    const src = pendingDataset ?? currentDataset;
+    if (!src || !newName || oldName === newName) return;
+    const ds = JSON.parse(JSON.stringify(src)) as Dataset;
+    const targetCol = ds.columns.find((c) => c.name === oldName);
+    if (targetCol) targetCol.name = newName;
+    ds.rows = ds.rows.map((row) => {
+      if (oldName in row) {
+        const newRow = { ...row, [newName]: row[oldName] };
+        delete newRow[oldName];
+        return newRow;
+      }
+      return row;
+    });
+    setPendingDataset(ds);
+    setHasChanges(true);
+  }, [pendingDataset, currentDataset]);
 
-  if (!dataset) {
+  if (!currentDataset) {
     return (
-      <div style={{ padding: '4px 0 24px' }}>
-        <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>数据清洗</Title>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+        <PageHeader title="数据清洗" description="处理缺失值、异常值，进行列操作" />
         <EmptyState description="请先导入数据" actionText="前往导入 →" actionPath="/import" />
       </div>
     );
   }
+  const ds = pendingDataset ?? currentDataset;
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'missing', label: '缺失值处理' },
+    { id: 'outlier', label: '异常值检测' },
+    { id: 'columns', label: '列操作' },
+  ];
 
   return (
-    <div style={{ padding: '4px 0 24px' }}>
-      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>数据清洗</Title>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+      <PageHeader title="数据清洗" description="处理缺失值、异常值，进行列操作">
+        <button className="btn-primary" onClick={applyChanges} disabled={!hasChanges}>
+          <Play className="h-4 w-4" />
+          {hasChanges ? '应用更改' : '无待应用更改'}
+        </button>
+      </PageHeader>
 
-      <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 20, background: 'rgba(255,255,255,0.4)' }}>
-        <Tabs
-          items={[
-            {
-              key: 'missing', label: '缺失值',
-              children: (
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Space>
-                    <span>适用列:</span>
-                    <Select mode="multiple" style={{ minWidth: 200 }} value={missingTargetCols} onChange={setMissingTargetCols}
-                      options={[
-                        { label: '全部数值列', value: '__all_numeric__' },
-                        ...dataset.columns.map((c) => ({ label: c.name, value: c.name })),
-                      ]} />
-                  </Space>
-                  <Radio.Group value={missingMethod} onChange={(e) => setMissingMethod(e.target.value)}>
-                    <Radio value="delete">删除含缺失值的行</Radio>
-                    <Radio value="fill">填充缺失值</Radio>
-                    <Radio value="mark">仅标记，不处理</Radio>
-                  </Radio.Group>
-                  {missingMethod === 'fill' && <Space>
-                    <Radio.Group value={fillStrategy} onChange={(e) => setFillStrategy(e.target.value)}>
-                      <Radio value="mean">均值</Radio>
-                      <Radio value="median">中位数</Radio>
-                      <Radio value="custom">指定值</Radio>
-                    </Radio.Group>
-                    {fillStrategy === 'custom' && <InputNumber value={fillValue} onChange={(v) => setFillValue(v ?? 0)} />}
-                  </Space>}
-                  <Alert type="info" message={`含缺失值的行: ${missingRowCount}`} style={{ background: 'rgba(91,127,149,0.06)', border: 'none' }} />
-                  <Button type="primary" onClick={handleMissingValues} disabled={missingMethod === 'mark'}>预览变更</Button>
-                </Space>
-              ),
-            },
-            {
-              key: 'outliers', label: '异常值',
-              children: (
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Alert type="info" message="使用 IQR 方法 (Q1 ± 1.5×IQR) 检测异常值。异常值将被标记为缺失。" style={{ background: 'rgba(201,169,110,0.08)', border: 'none' }} />
-                  <Button type="primary" onClick={handleOutliers}>检测并标记异常值</Button>
-                  {outlierCount > 0 && <Alert type="warning" message={`检测到 ${outlierCount} 个异常值，已在预览表格中高亮并标记为缺失。`} />}
-                </Space>
-              ),
-            },
-            {
-              key: 'columns', label: '列操作',
-              children: (
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Space>
-                    <span>重命名列:</span>
-                    {dataset.columns.slice(0, 5).map((col) => (
-                      <Input key={col.name} size="small" style={{ width: 130 }} defaultValue={col.name}
-                        onBlur={(e) => renameColumn(col.name, e.target.value)} />
-                    ))}
-                  </Space>
-                </Space>
-              ),
-            },
-          ]}
-        />
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <Text strong style={{ display: 'block', marginBottom: 10, fontSize: 14 }}>数据预览</Text>
-        <DataTable dataset={dataset} maxRows={10} highlightCells={outlierHighlights.length > 0 ? outlierHighlights : undefined} />
-      </div>
-
-      {hasChanges && (
-        <div style={{ display: 'flex', gap: 12 }}>
-          <Button onClick={resetChanges}>重置</Button>
-          <Button type="primary" onClick={applyChanges}>应用更改</Button>
+      {/* Dataset selector */}
+      <div className="glass-card-static p-4 mb-6 animate-fade-in">
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <label className="text-xs text-slate-500 mb-1 block">选择数据集</label>
+            <select className="input-field" value={currentDataset.id} onChange={(e) => { setCurrentDataset(e.target.value); resetChanges(); }}>
+              {datasetList.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              {datasetList.length === 0 && <option>{currentDataset.name}</option>}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 pt-5">
+            <span className="tag text-emerald-300 border-emerald-500/20 bg-emerald-500/5">{currentDataset.rowCount} 行</span>
+            <span className="tag text-blue-300 border-blue-500/20 bg-blue-500/5">{currentDataset.colCount} 列</span>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Tabs */}
+      <div className="glass-card-static p-1.5 mb-6 inline-flex animate-fade-in">
+        {tabs.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn ${tab === t.id ? 'active' : ''}`}>{t.label}</button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Column list */}
+        <div className="glass-card-static p-4 animate-fade-in">
+          <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <Eye className="h-4 w-4 text-indigo-400" />
+            数据列
+          </h3>
+          <div className="space-y-1">
+            {ds.columns.map((col) => {
+              const missing = missingCounts.get(col.name) ?? 0;
+              return (
+                <div key={col.name} className="flex items-center justify-between p-2 rounded-lg transition hover:bg-white/[0.02]">
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-300 truncate">{col.name}</p>
+                    <p className="text-xs text-slate-500">{col.type === 'numeric' ? '数值' : '分类'} · {col.role === 'independent' ? '自变量' : col.role === 'dependent' ? '因变量' : col.role === 'metadata' ? '元数据' : '未知'}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {missing > 0 ? (
+                      <span className={`text-xs font-medium ${missing > 50 ? 'text-red-400' : 'text-amber-400'}`}>缺失 {missing}</span>
+                    ) : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action panel */}
+        <div className="lg:col-span-2 glass-card-static p-5 animate-fade-in">
+          {tab === 'missing' && (
+            <div className="animate-fade-in">
+              <h3 className="text-sm font-semibold text-white mb-4">缺失值处理策略</h3>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1.5 block">适用列</label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setTargetCols(targetCols.includes('__all_numeric__') ? [] : ['__all_numeric__'])}
+                      className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        targetCols.includes('__all_numeric__')
+                          ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                          : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:bg-white/[0.06]'
+                      }`}
+                    >全部数值列</button>
+                    {ds.columns.filter((c) => c.type === 'numeric').map((col) => (
+                      <button
+                        key={col.name}
+                        onClick={() => setTargetCols((prev) => prev.includes(col.name) ? prev.filter((x) => x !== col.name) : [...prev.filter((x) => x !== '__all_numeric__'), col.name])}
+                        className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          targetCols.includes(col.name)
+                            ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                            : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:bg-white/[0.06]'
+                        }`}
+                      >{col.name}</button>
+                    ))}
+                  </div>
+                </div>
+                <label className="flex items-start gap-3 p-3 rounded-xl transition hover:bg-white/[0.02] cursor-pointer">
+                  <input type="radio" checked={missingMethod === 'delete'} onChange={() => setMissingMethod('delete')} className="mt-1 accent-indigo-500" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-300">删除含缺失值行</p>
+                    <p className="text-xs text-slate-500">移除任何包含缺失数据的行</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 p-3 rounded-xl transition hover:bg-white/[0.02] cursor-pointer">
+                  <input type="radio" checked={missingMethod === 'fill'} onChange={() => setMissingMethod('fill')} className="mt-1 accent-indigo-500" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-300">填充缺失值</p>
+                    <div className="flex gap-1.5 mt-2 flex-wrap">
+                      {([['mean', '均值'], ['median', '中位数'], ['custom', '指定值']] as const).map(([key, label]) => (
+                        <button
+                          key={key}
+                          onClick={() => setFillStrategy(key)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                            fillStrategy === key
+                              ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                              : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:bg-white/[0.06]'
+                          }`}
+                        >{label}</button>
+                      ))}
+                    </div>
+                    {fillStrategy === 'custom' && (
+                      <input type="number" className="input-field mt-2" value={fillValue} onChange={(e) => setFillValue(Number(e.target.value))} />
+                    )}
+                  </div>
+                </label>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">含缺失值的行: <span className="text-amber-400">{missingRowCount}</span></span>
+                <div className="flex gap-3">
+                  <button className="btn-secondary" onClick={resetChanges}><RotateCcw className="h-3.5 w-3.5" /> 重置</button>
+                  <button className="btn-primary" onClick={handleMissingValues}><Settings2 className="h-3.5 w-3.5" /> 应用选择</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'outlier' && (
+            <div className="animate-fade-in">
+              <h3 className="text-sm font-semibold text-white mb-4">异常值检测 (IQR 方法)</h3>
+              <p className="text-xs text-slate-500 mb-4">使用四分位距法 (Q1 ± 1.5×IQR) 检测异常值。检测到的异常值将被标记为缺失，可在数据预览中查看高亮。</p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">{outlierCount > 0 ? <>已检测到 <span className="text-amber-400">{outlierCount}</span> 个异常值并标记为缺失</> : '尚未检测'}</span>
+                <button className="btn-primary" onClick={handleOutliers}><AlertTriangle className="h-3.5 w-3.5" /> 检测并标记异常值</button>
+              </div>
+            </div>
+          )}
+
+          {tab === 'columns' && (
+            <div className="animate-fade-in">
+              <h3 className="text-sm font-semibold text-white mb-4">重命名列</h3>
+              <p className="text-xs text-slate-500 mb-4">在输入框中修改列名，失焦后应用到预览数据。仅显示前 6 列。</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {ds.columns.slice(0, 6).map((col) => (
+                  <label key={col.name} className="block">
+                    <span className="text-xs text-slate-500 block mb-1">{col.name}</span>
+                    <input className="input-field" defaultValue={col.name} onBlur={(e) => renameColumn(col.name, e.target.value)} />
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Preview */}
+      <div className="glass-card-static p-5 mt-6 animate-fade-in">
+        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-indigo-400" />
+          数据预览
+        </h3>
+        <DataTable dataset={ds} maxRows={10} highlightCells={outlierHighlights.length > 0 ? outlierHighlights : undefined} />
+        {hasChanges && (
+          <div className="mt-4 flex justify-end gap-3">
+            <button className="btn-secondary" onClick={resetChanges}><RotateCcw className="h-3.5 w-3.5" /> 重置</button>
+            <button className="btn-primary" onClick={applyChanges}><Play className="h-3.5 w-3.5" /> 应用更改</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

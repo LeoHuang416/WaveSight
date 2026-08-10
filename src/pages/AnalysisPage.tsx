@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button, Select, Table, Typography, Alert, Space, Collapse, message, Spin, Empty, Descriptions, Divider, Checkbox, Tabs, Tooltip, Radio } from 'antd';
+import { Button, Select, Table, Typography, Alert, Space, message, Spin, Descriptions, Divider, Checkbox, Tabs, Tooltip, Radio } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
 import { PlayCircleOutlined, SaveOutlined, DownloadOutlined, CopyOutlined } from '@ant-design/icons';
+import PageHeader from '@/components/layout/PageHeader';
+import EmptyState from '@/components/common/EmptyState';
 import { useDataStore } from '@/stores/useDataStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useChartStore } from '@/stores/useChartStore';
@@ -19,7 +20,7 @@ import { extractByGroup, variance, fTestPValue } from '@/engine/utils';
 import type { AnalysisType, AnalysisConfig, ResultTable, ChartDataSource } from '@/types/analysis';
 import type { ChartConfig, ChartType } from '@/types/chart';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface AnalysisDef {
   key: AnalysisType;
@@ -45,7 +46,6 @@ const ANALYSES: AnalysisDef[] = [
 ];
 
 export default function AnalysisPage() {
-  const navigate = useNavigate();
   const { currentDataset, getNumericColumns, getCategoricalColumns } = useDataStore();
   const { addRecord } = useHistoryStore();
   const { addChart } = useChartStore();
@@ -348,11 +348,9 @@ export default function AnalysisPage() {
 
   if (!currentDataset) {
     return (
-      <div style={{ padding: 24 }}>
-        <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>实验数据分析</Title>
-        <div className="glass-card" style={{ padding: '24px 28px', background: 'rgba(255,255,255,0.4)' }}>
-          <Empty description="请先导入数据" />
-        </div>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+        <PageHeader title="实验数据分析" description="选择统计方法和数据列进行分析" />
+        <EmptyState description="请先导入数据" actionText="前往导入 →" actionPath="/import" />
       </div>
     );
   }
@@ -360,28 +358,44 @@ export default function AnalysisPage() {
   const groups = [...new Set(ANALYSES.map((a) => a.group))];
 
   return (
-    <div style={{ padding: 24 }}>
-      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>实验数据分析</Title>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+      <PageHeader title="实验数据分析" description="选择统计方法和数据列进行分析">
+        <span className="tag text-indigo-300 border-indigo-500/20 bg-indigo-500/5">α = {alpha}</span>
+        <button className="btn-primary text-sm" onClick={run} disabled={!activeAnalysis || running}>
+          <PlayCircleOutlined /> 运行分析
+        </button>
+      </PageHeader>
 
-      <div className="glass-card" style={{ padding: '24px 28px', background: 'rgba(255,255,255,0.4)' }}>
-        <div style={{ display: 'flex', gap: 16 }}>
-          {/* Left: analysis menu */}
-          <div style={{ width: 180, flexShrink: 0 }}>
-            <Collapse defaultActiveKey={groups} items={groups.map((g) => ({
-              key: g, label: g,
-              children: <Space direction="vertical" style={{ width: '100%' }}>
-                {ANALYSES.filter((a) => a.group === g).map((a) => (
-                  <Button key={a.key} type={analysisType === a.key ? 'primary' : 'default'} block size="small"
-                    onClick={() => { setAnalysisType(a.key); setResults(null); setValueCols([]); setGroupCol(undefined); setXCols([]); setYCol(undefined); setFactorCols([]); setResponseCol(undefined); }}>
-                    {a.label}
-                  </Button>
-                ))}
-              </Space>,
-            }))} />
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left: analysis menu */}
+        <div className="lg:col-span-1 glass-card-static p-3 h-fit">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2">分析方法</h3>
+          {groups.map((g) => (
+            <div key={g} className="mb-3">
+              <p className="text-[10px] font-medium text-slate-600 uppercase tracking-wider px-2 mb-1">{g}</p>
+              <div className="space-y-0.5">
+                {ANALYSES.filter((a) => a.group === g).map((a) => {
+                  const isActive = analysisType === a.key;
+                  return (
+                    <button
+                      key={a.key}
+                      onClick={() => { setAnalysisType(a.key); setResults(null); setValueCols([]); setGroupCol(undefined); setXCols([]); setYCol(undefined); setFactorCols([]); setResponseCol(undefined); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs transition-all ${
+                        isActive
+                          ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] border border-transparent'
+                      }`}
+                    >{a.label}</button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
 
           {/* Center: variable config + results */}
-          <div style={{ flex: 1 }}>
+          <div className="lg:col-span-3 space-y-6">
+            <div className="glass-card-static p-5">
             {activeAnalysis && (
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Space wrap>
@@ -409,12 +423,12 @@ export default function AnalysisPage() {
                     </Space>
                   )}
                 </Space>
-                <Button type="primary" icon={<PlayCircleOutlined />} loading={running} onClick={run}>运行分析</Button>
               </Space>
             )}
+            </div>
 
             {results && (
-              <div style={{ marginTop: 24 }}>
+              <div className="glass-card-static p-5">
                 {analysisType === 'pipeline' ? (
                   /* Phase-grouped rendering for pipeline */
                   ['【阶段一】', '【阶段二】', '【阶段三】'].map((phase) => {
@@ -523,18 +537,11 @@ export default function AnalysisPage() {
             )}
           </div>
 
-          {/* Right: action */}
-          <div style={{ width: 120, flexShrink: 0 }}>
-            <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="α">{alpha}</Descriptions.Item>
-            </Descriptions>
-          </div>
-        </div>
       </div>
 
       {/* Available columns bar */}
-      <div className="glass-card" style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,255,255,0.25)', borderRadius: 4 }}>
-        <Text type="secondary">可用列: </Text>
+      <div className="glass-card-static px-4 py-2 mt-4 flex flex-wrap items-center gap-1">
+        <span className="text-xs text-slate-500 mr-2">可用列:</span>
         {numericCols.map((c) => <Button key={c} size="small" type="text" onClick={() => {
           if (valueCols.includes(c)) setValueCols(valueCols.filter((v) => v !== c));
           else setValueCols([...valueCols, c]);

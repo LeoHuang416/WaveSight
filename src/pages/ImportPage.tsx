@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Steps, Button, Upload, Radio, InputNumber, Switch, Table, Tag, message, Space, Typography, Descriptions, Progress, Alert, Input, Popconfirm } from 'antd';
 import { InboxOutlined, DeleteOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import PageHeader from '@/components/layout/PageHeader';
 import { parseFile, loadFullFile, validateFileSize, type ImportProgress } from '@/utils/fileParser';
 import { useDataOperations } from '@/hooks/useDataOperations';
 import type { ImportPreview, ColumnType, ColumnRole, ColumnMeta } from '@/types/data';
 
 const { Dragger } = Upload;
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 export default function ImportPage() {
   const navigate = useNavigate();
@@ -438,10 +439,12 @@ export default function ImportPage() {
   }, [preview, columnTypes, editingCell, editValue, deletedRows]);
 
   return (
-    <div style={{ padding: '4px 0 24px' }}>
-      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>数据导入</Title>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
+      <PageHeader title="数据导入" description="支持 CSV、Excel、JSON 格式，拖拽或点击上传">
+        <Text type="secondary" style={{ fontSize: 12 }}>本地解析 · 数据仅存浏览器</Text>
+      </PageHeader>
 
-      <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 20, background: 'rgba(255,255,255,0.4)' }}>
+      <div className="glass-panel p-6 sm:p-8 mb-6">
         <Steps
           current={step}
           items={[{ title: '选择文件' }, { title: '预览与清洗' }, { title: '确认导入' }]}

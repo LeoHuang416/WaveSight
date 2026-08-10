@@ -67,12 +67,7 @@ export default function DataTable({ dataset, highlightCells, maxRows }: DataTabl
   }));
 
   return (
-    <div style={{
-      background: isKimi ? 'transparent' : 'rgba(255,255,255,0.4)',
-      borderRadius: isKimi ? 0 : 12,
-      border: isKimi ? 'none' : '1px solid rgba(255,255,255,0.8)',
-      overflow: 'hidden',
-    }}>
+    <div className="overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
       <Table
         columns={columns}
         dataSource={rows.map((row, i) => ({ ...row, _key: i }))}

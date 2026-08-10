@@ -1,33 +1,51 @@
 import { useState, useEffect } from 'react';
-import { Card, InputNumber, Radio, Select, Switch, Button, Space, Typography, message, Modal, Input, Statistic } from 'antd';
-import { ExportOutlined, DeleteOutlined } from '@ant-design/icons';
+import { message, Modal, Input, InputNumber, Select, Radio, Switch } from 'antd';
+import { Palette, Sun, Moon, Monitor, Database, Download, Sigma, BarChart3, History, Info } from 'lucide-react';
+import PageHeader from '@/components/layout/PageHeader';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useDataStore } from '@/stores/useDataStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useChartStore } from '@/stores/useChartStore';
 import { getStorageStats, exportAllData, clearAllData } from '@/db/operations';
 import { exportAllDataJSON } from '@/utils/export';
-import { THEMES, ACCENT_PRESETS, getAccentColor } from '@/themes';
-import type { AppearanceMode, RowHeight, FontSize, DataAlign, EdgeSidebarMode, EdgePanelDefault, EdgeTabPosition, FluentGradient, FluentGlassStrength } from '@/stores/useSettingsStore';
+import { ACCENT_PRESETS } from '@/themes';
+import type { AppearanceMode } from '@/stores/useSettingsStore';
 
-const { Title, Text } = Typography;
+function Section({ icon, iconColor, title, children }: {
+  icon: React.ReactNode; iconColor: string; title: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="glass-card-static p-5 animate-fade-in">
+      <div className="flex items-center gap-2.5 mb-5">
+        <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${iconColor}`}>{icon}</div>
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </div>
+  );
+}
+
+function Row({ title, desc, children }: { title: string; desc?: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-sm text-slate-300">{title}</p>
+        {desc && <p className="text-xs text-slate-500">{desc}</p>}
+      </div>
+      <div className="flex-shrink-0">{children}</div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const {
-    uiTheme, appearanceMode, kimiRowHeight, kimiFontSize, kimiDataAlign,
-    edgeSidebarMode, edgePanelDefault, edgeTabPosition, edgeCompactMode,
-    accentColor, fluentGradient, fluentGlassStrength,
-    alpha, significantDigits, defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
-    setUiTheme, setAppearanceMode, setKimiRowHeight, setKimiFontSize, setKimiDataAlign,
-    setEdgeSidebarMode, setEdgePanelDefault, setEdgeTabPosition, setEdgeCompactMode,
-    setAccentColor, setFluentGradient, setFluentGlassStrength,
-    setAlpha, setSignificantDigits, setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays,
+    appearanceMode, accentColor, alpha, significantDigits,
+    defaultColorScheme, defaultExportFormat, autoCleanHistory, historyRetentionDays,
+    setAppearanceMode, setAccentColor, setAlpha, setSignificantDigits,
+    setDefaultColorScheme, setDefaultExportFormat, setAutoCleanHistory, setHistoryRetentionDays,
   } = useSettingsStore();
 
   const [stats, setStats] = useState({ datasetCount: 0, chartCount: 0, historyCount: 0 });
-  const isKimi = uiTheme === 'kimi-minimal';
-  const isEdge = uiTheme === 'edge-modern';
-  const isFluent = uiTheme === 'fluent-glass';
 
   useEffect(() => { getStorageStats().then(setStats); }, []);
 
@@ -56,177 +74,118 @@ export default function SettingsPage() {
           useHistoryStore.getState().refresh();
           message.success('已清空');
           getStorageStats().then(setStats);
-        }
-        else { message.error('输入不匹配'); return Promise.reject(); }
+        } else { message.error('输入不匹配'); return Promise.reject(); }
       },
     });
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 640 }}>
-      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>设置</Title>
-      <Space direction="vertical" style={{ width: '100%' }} size={16}>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
+      <PageHeader title="设置" description="个性化配置工作台偏好" />
 
-        {/* ─── Appearance ─── */}
-        <Card title="外观" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <Space>
-              <Text style={{ width: 80, display: 'inline-block' }}>界面风格</Text>
-              <Radio.Group value={uiTheme} onChange={(e) => setUiTheme(e.target.value)}>
-                <Space direction="vertical" size={4}>
-                  {THEMES.map((t) => (
-                    <Radio key={t.id} value={t.id}>{t.label} — {t.description}</Radio>
-                  ))}
-                </Space>
-              </Radio.Group>
-            </Space>
-
-            <Space>
-              <Text style={{ width: 80, display: 'inline-block' }}>外观模式</Text>
-              <Radio.Group value={appearanceMode} onChange={(e) => setAppearanceMode(e.target.value as AppearanceMode)}>
-                <Radio.Button value="system">跟随系统</Radio.Button>
-                <Radio.Button value="light">浅色</Radio.Button>
-                <Radio.Button value="dark">深色</Radio.Button>
-              </Radio.Group>
-            </Space>
-
-            <Space>
-              <Text style={{ width: 80, display: 'inline-block' }}>强调色</Text>
-              <Radio.Group value={accentColor} onChange={(e) => setAccentColor(e.target.value)}>
-                {ACCENT_PRESETS.map((p) => (
-                  <Radio.Button key={p.id} value={p.id}>
-                    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: p.color, marginRight: 4, verticalAlign: 'middle' }} />
-                    {p.label}
-                  </Radio.Button>
-                ))}
-              </Radio.Group>
-            </Space>
-
-            {/* ── Theme-specific advanced options ── */}
-            <div style={{ borderTop: '1px solid #eee', margin: '4px 0', paddingTop: 8 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>高级</Text>
+      <div className="space-y-6">
+        {/* Appearance */}
+        <Section icon={<Palette className="h-4 w-4" />} iconColor="bg-indigo-500/10 text-indigo-400" title="外观">
+          <Row title="主题模式" desc="深色玻璃为推荐外观">
+            <div className="flex gap-1.5">
+              {([
+                { key: 'dark', icon: <Moon className="h-3.5 w-3.5" />, label: '深色' },
+                { key: 'light', icon: <Sun className="h-3.5 w-3.5" />, label: '浅色' },
+                { key: 'system', icon: <Monitor className="h-3.5 w-3.5" />, label: '系统' },
+              ] as { key: AppearanceMode; icon: React.ReactNode; label: string }[]).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setAppearanceMode(t.key)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    appearanceMode === t.key
+                      ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                      : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:bg-white/[0.06]'
+                  }`}
+                >{t.icon}{t.label}</button>
+              ))}
             </div>
+          </Row>
+          <Row title="强调色" desc="用于 antd 控件与选中态">
+            <div className="flex gap-1.5">
+              {ACCENT_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  title={p.label}
+                  onClick={() => setAccentColor(p.id)}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all ${
+                    accentColor === p.id ? 'border-white/60 ring-2 ring-indigo-400/40' : 'border-white/10 hover:border-white/30'
+                  }`}
+                  style={{ background: p.color }}
+                />
+              ))}
+            </div>
+          </Row>
+        </Section>
 
-            {isKimi && (
-              <Space direction="vertical" size={8}>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>行高</Text>
-                  <Radio.Group value={kimiRowHeight} onChange={(e) => setKimiRowHeight(e.target.value as RowHeight)}>
-                    <Radio.Button value="compact">紧凑 40px</Radio.Button>
-                    <Radio.Button value="standard">标准 48px</Radio.Button>
-                    <Radio.Button value="relaxed">宽松 56px</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>字体大小</Text>
-                  <Radio.Group value={kimiFontSize} onChange={(e) => setKimiFontSize(e.target.value as FontSize)}>
-                    <Radio.Button value="small">小 12px</Radio.Button>
-                    <Radio.Button value="standard">标准 14px</Radio.Button>
-                    <Radio.Button value="large">大 16px</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>数据对齐</Text>
-                  <Radio.Group value={kimiDataAlign} onChange={(e) => setKimiDataAlign(e.target.value as DataAlign)}>
-                    <Radio.Button value="auto">自动</Radio.Button>
-                    <Radio.Button value="left">全部左对齐</Radio.Button>
-                    <Radio.Button value="decimal">小数点对齐</Radio.Button>
-                  </Radio.Group>
-                </Space>
-              </Space>
-            )}
+        {/* Analysis defaults */}
+        <Section icon={<Sigma className="h-4 w-4" />} iconColor="bg-purple-500/10 text-purple-400" title="分析默认值">
+          <Row title="显著性水平 α" desc="假设检验的判断阈值">
+            <InputNumber min={0.001} max={0.1} step={0.01} value={alpha} onChange={(v) => setAlpha(v ?? 0.05)} style={{ width: 110 }} />
+          </Row>
+          <Row title="有效数字位数" desc="结果表格中的数字显示">
+            <Select value={significantDigits} onChange={setSignificantDigits} style={{ width: 100 }} options={[2, 3, 4, 5, 6].map((n) => ({ label: `${n} 位`, value: n }))} />
+          </Row>
+        </Section>
 
-            {isEdge && (
-              <Space direction="vertical" size={8}>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>侧边栏</Text>
-                  <Radio.Group value={edgeSidebarMode} onChange={(e) => setEdgeSidebarMode(e.target.value as EdgeSidebarMode)}>
-                    <Radio.Button value="always">常驻</Radio.Button>
-                    <Radio.Button value="auto">自动收起</Radio.Button>
-                    <Radio.Button value="hidden">完全隐藏</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>右侧面板</Text>
-                  <Radio.Group value={edgePanelDefault} onChange={(e) => setEdgePanelDefault(e.target.value as EdgePanelDefault)}>
-                    <Radio.Button value="expanded">默认展开</Radio.Button>
-                    <Radio.Button value="collapsed">默认收起</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>标签页位置</Text>
-                  <Radio.Group value={edgeTabPosition} onChange={(e) => setEdgeTabPosition(e.target.value as EdgeTabPosition)}>
-                    <Radio.Button value="top">顶部</Radio.Button>
-                    <Radio.Button value="left">左侧垂直</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>紧凑模式</Text>
-                  <Switch checked={edgeCompactMode} onChange={setEdgeCompactMode} />
-                  <Text type="secondary" style={{ fontSize: 12 }}>间距减少 30%</Text>
-                </Space>
-              </Space>
-            )}
+        {/* Chart defaults */}
+        <Section icon={<BarChart3 className="h-4 w-4" />} iconColor="bg-amber-500/10 text-amber-400" title="图表默认值">
+          <Row title="默认配色" desc="新建图表的配色方案">
+            <Radio.Group value={defaultColorScheme} onChange={(e) => setDefaultColorScheme(e.target.value)}>
+              <Radio value="grayscale">学术灰度</Radio>
+              <Radio value="color">彩色</Radio>
+            </Radio.Group>
+          </Row>
+          <Row title="导出格式" desc="图表导出的默认格式">
+            <Select value={defaultExportFormat} onChange={setDefaultExportFormat} style={{ width: 110 }} options={[{ label: 'SVG', value: 'svg' }, { label: 'PNG', value: 'png' }, { label: 'CSV', value: 'csv' }]} />
+          </Row>
+        </Section>
 
-            {isFluent && (
-              <Space direction="vertical" size={8}>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>背景渐变</Text>
-                  <Radio.Group value={fluentGradient} onChange={(e) => setFluentGradient(e.target.value as FluentGradient)}>
-                    <Radio.Button value="cool">冷色渐变</Radio.Button>
-                    <Radio.Button value="warm">暖色渐变</Radio.Button>
-                    <Radio.Button value="dark">深色渐变</Radio.Button>
-                  </Radio.Group>
-                </Space>
-                <Space><Text style={{ width: 80, display: 'inline-block' }}>毛玻璃强度</Text>
-                  <Radio.Group value={fluentGlassStrength} onChange={(e) => setFluentGlassStrength(e.target.value as FluentGlassStrength)}>
-                    <Radio.Button value="light">轻度 12px</Radio.Button>
-                    <Radio.Button value="standard">标准 24px</Radio.Button>
-                    <Radio.Button value="heavy">重度 40px</Radio.Button>
-                  </Radio.Group>
-                </Space>
-              </Space>
-            )}
-          </Space>
-        </Card>
+        {/* History */}
+        <Section icon={<History className="h-4 w-4" />} iconColor="bg-emerald-500/10 text-emerald-400" title="历史记录">
+          <Row title="自动清理" desc="开启后按保留天数清理旧记录">
+            <Switch checked={autoCleanHistory} onChange={setAutoCleanHistory} />
+          </Row>
+          {autoCleanHistory && (
+            <Row title="保留天数">
+              <InputNumber min={7} max={365} value={historyRetentionDays} onChange={(v) => setHistoryRetentionDays(v ?? 90)} style={{ width: 110 }} />
+            </Row>
+          )}
+        </Section>
 
-        {/* ─── Analysis defaults ─── */}
-        <Card title="分析默认值" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
-          <Space direction="vertical">
-            <Space><Text>显著性水平 α</Text><InputNumber min={0.001} max={0.1} step={0.01} value={alpha} onChange={(v) => setAlpha(v ?? 0.05)} /></Space>
-            <Space><Text>有效数字位数</Text><Select value={significantDigits} onChange={setSignificantDigits} style={{ width: 80 }} options={[2, 3, 4, 5, 6].map((n) => ({ label: String(n), value: n }))} /></Space>
-          </Space>
-        </Card>
+        {/* Data management */}
+        <Section icon={<Database className="h-4 w-4" />} iconColor="bg-blue-500/10 text-blue-400" title="数据管理">
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: '数据集', value: stats.datasetCount },
+              { label: '图表', value: stats.chartCount },
+              { label: '历史记录', value: stats.historyCount },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl bg-white/[0.02] border border-white/5 p-4 text-center">
+                <p className="stat-value text-2xl">{s.value}</p>
+                <p className="text-xs text-slate-500 mt-1">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button className="btn-secondary text-xs" onClick={handleExport}>
+              <Download className="h-3.5 w-3.5" /> 导出全部数据 (JSON)
+            </button>
+            <button className="btn-secondary text-xs !text-red-400 hover:!border-red-400/30" onClick={handleClear}>
+              清空全部数据
+            </button>
+          </div>
+        </Section>
 
-        {/* ─── Chart defaults ─── */}
-        <Card title="图表默认值" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
-          <Space direction="vertical">
-            <Space><Text>默认配色</Text><Radio.Group value={defaultColorScheme} onChange={(e) => setDefaultColorScheme(e.target.value)}><Radio value="grayscale">学术灰度</Radio><Radio value="color">彩色</Radio></Radio.Group></Space>
-            <Space><Text>导出格式</Text><Select value={defaultExportFormat} onChange={setDefaultExportFormat} style={{ width: 100 }} options={[{ label: 'SVG', value: 'svg' }, { label: 'PNG', value: 'png' }, { label: 'CSV', value: 'csv' }]} /></Space>
-          </Space>
-        </Card>
-
-        {/* ─── History ─── */}
-        <Card title="历史记录" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
-          <Space direction="vertical">
-            <Space><Text>自动清理</Text><Switch checked={autoCleanHistory} onChange={setAutoCleanHistory} /></Space>
-            {autoCleanHistory && <Space><Text>保留天数</Text><InputNumber min={7} max={365} value={historyRetentionDays} onChange={(v) => setHistoryRetentionDays(v ?? 90)} /></Space>}
-          </Space>
-        </Card>
-
-        {/* ─── Data management ─── */}
-        <Card title="数据管理" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px' }}>
-          <Space style={{ width: '100%' }} direction="vertical">
-            <Space>
-              <Statistic title="数据集" value={stats.datasetCount} />
-              <Statistic title="图表" value={stats.chartCount} />
-              <Statistic title="历史记录" value={stats.historyCount} />
-            </Space>
-            <Space>
-              <Button icon={<ExportOutlined />} onClick={handleExport}>导出全部数据 (JSON)</Button>
-              <Button danger icon={<DeleteOutlined />} onClick={handleClear}>清空全部数据</Button>
-            </Space>
-          </Space>
-        </Card>
-
-        {/* ─── About ─── */}
-        <Card title="关于" size="small" className="glass-card" bodyStyle={{ padding: '20px 24px', background: 'rgba(255,255,255,0.25)' }}>
-          <Text>实验数据分析工作台 v1.0</Text><br />
-          <Text type="secondary">本地运行，数据仅在当前电脑浏览器存储。无需联网。</Text>
-        </Card>
-      </Space>
+        {/* About */}
+        <Section icon={<Info className="h-4 w-4" />} iconColor="bg-slate-500/10 text-slate-400" title="关于">
+          <Row title="WaveSight · 实验数据分析工作台 v1.0" desc="本地运行，数据仅在当前电脑浏览器存储，无需联网。" />
+        </Section>
+      </div>
     </div>
   );
 }

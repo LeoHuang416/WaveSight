@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Card, Button, Input, Select, Space, Typography, Empty, Tag, Popconfirm, message, Radio } from 'antd';
+import { Card, Button, Input, Select, Space, Typography, Empty, Popconfirm, message, Radio } from 'antd';
 import { PlusOutlined, DeleteOutlined, DownloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
+import PageHeader from '@/components/layout/PageHeader';
 import { useChartStore } from '@/stores/useChartStore';
 import { useDataStore } from '@/stores/useDataStore';
 import { exportPNG, exportCSV } from '@/utils/export';
@@ -10,7 +11,7 @@ import { generateId, formatNumber } from '@/utils/format';
 import { buildContourOption } from '@/engine/rsmCharts';
 import type { ChartConfig, ChartType, ColorScheme } from '@/types/chart';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Search } = Input;
 
 const CHART_LABELS: Record<ChartType, string> = {
@@ -469,11 +470,13 @@ export default function ChartsPage() {
     const chart = charts.find((c) => c.id === editingChartId);
     if (!chart) { setViewMode('gallery'); return null; }
     return (
-      <div style={{ padding: 24, display: 'flex', gap: 16 }}>
-        <div style={{ flex: 1 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => setViewMode('gallery')}>← 返回画廊</Button>
-          <div className="glass-card" style={{ marginTop: 8, padding: 16, background: 'rgba(255,255,255,0.4)' }}>
-            <ReactECharts ref={(e) => setEchartsRef(e as ReactECharts)} option={renderOption(chart)} style={{ height: 400, background: '#fff' }} notMerge />
+      <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto flex flex-wrap gap-6">
+        <div style={{ flex: '1 1 400px' }}>
+          <button className="btn-secondary text-xs mb-3" onClick={() => setViewMode('gallery')}>
+            <ArrowLeftOutlined /> 返回画廊
+          </button>
+          <div className="glass-card-static p-4">
+            <ReactECharts ref={(e) => setEchartsRef(e as ReactECharts)} option={renderOption(chart)} style={{ height: 420, background: '#fff', borderRadius: 12 }} notMerge />
           </div>
         </div>
         <div style={{ width: 220 }}>
@@ -526,17 +529,30 @@ export default function ChartsPage() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <Title level={4} style={{ fontWeight: 600, marginBottom: 20, color: '#333' }}>实验图表</Title>
-      <Space style={{ marginBottom: 16 }}><Search placeholder="搜索图表..." onSearch={setSearch} style={{ width: 200 }} /><Select value={typeFilter} onChange={setTypeFilter} style={{ width: 120 }} options={[{ label: '全部', value: 'all' }, ...Object.entries(CHART_LABELS).map(([k, v]) => ({ label: v, value: k }))]} /><Button type="primary" icon={<PlusOutlined />} onClick={handleNew}>新建图表</Button></Space>
-      <div className="glass-card" style={{ padding: '24px 28px', background: 'rgba(255,255,255,0.4)' }}>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+      <PageHeader title="实验图表" description="12 种可视化类型，交互式探索与导出">
+        <div className="flex flex-wrap items-center gap-2">
+          <Search placeholder="搜索图表..." onSearch={setSearch} style={{ width: 180 }} />
+          <Select value={typeFilter} onChange={setTypeFilter} style={{ width: 120 }} options={[{ label: '全部', value: 'all' }, ...Object.entries(CHART_LABELS).map(([k, v]) => ({ label: v, value: k }))]} />
+          <button className="btn-primary text-sm" onClick={handleNew}><PlusOutlined /> 新建图表</button>
+        </div>
+      </PageHeader>
+      <div className="glass-card-static p-5">
         {filtered.length === 0 ? <Empty description={charts.length === 0 ? '暂无图表，分析数据后保存图表或点击"新建图表"' : '无匹配结果'} /> :
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
             {filtered.map((c) => (
-              <Card key={c.id} className="glass-card" hoverable size="small" bodyStyle={{ padding: '16px' }} onClick={() => setEditingChart(c.id)}
-                cover={<div style={{ height: 140, overflow: 'hidden' }}><ReactECharts option={renderOption(c)} style={{ height: 140 }} notMerge /></div>}>
-                <Card.Meta title={c.title} description={<><Tag>{CHART_LABELS[c.chartType]}</Tag><Text type="secondary" style={{ fontSize: 11 }}>{new Date(c.createdAt).toLocaleString('zh-CN')}</Text></>} />
-              </Card>
+              <div key={c.id} className="glass-card overflow-hidden cursor-pointer group" onClick={() => setEditingChart(c.id)}>
+                <div className="h-36 overflow-hidden bg-white">
+                  <ReactECharts option={renderOption(c)} style={{ height: 144, background: '#fff' }} notMerge />
+                </div>
+                <div className="p-3">
+                  <p className="text-sm font-medium text-slate-200 truncate group-hover:text-white">{c.title}</p>
+                  <div className="mt-1.5 flex items-center justify-between">
+                    <span className="tag text-xs">{CHART_LABELS[c.chartType]}</span>
+                    <span className="text-[10px] text-slate-500">{new Date(c.createdAt).toLocaleDateString('zh-CN')}</span>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>}
       </div>

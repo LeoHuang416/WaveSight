@@ -1,82 +1,144 @@
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu } from 'antd';
 import {
-  HomeOutlined, ImportOutlined, ExperimentOutlined,
-  BarChartOutlined, HistoryOutlined, SettingOutlined, ClearOutlined,
-} from '@ant-design/icons';
-import { useSettingsStore } from '@/stores/useSettingsStore';
-import { getTheme } from '@/themes';
+  LayoutDashboard, Upload, Sparkles, BarChart3, PieChart,
+  History, Settings, ChevronLeft, ChevronRight, Menu, X, FlaskConical, Database,
+} from 'lucide-react';
+import { useDataStore } from '@/stores/useDataStore';
 
-const menuItems = [
-  { key: '/', icon: <HomeOutlined />, label: '总览' },
-  { key: '/import', icon: <ImportOutlined />, label: '导入' },
-  { key: '/cleaning', icon: <ClearOutlined />, label: '清洗' },
-  { key: '/analysis', icon: <ExperimentOutlined />, label: '分析' },
-  { key: '/charts', icon: <BarChartOutlined />, label: '图表' },
-  { key: '/history', icon: <HistoryOutlined />, label: '历史' },
-  { key: '/settings', icon: <SettingOutlined />, label: '设置' },
+const NAV = [
+  { href: '/', label: '总览', icon: <LayoutDashboard className="h-4 w-4" /> },
+  { href: '/import', label: '导入', icon: <Upload className="h-4 w-4" /> },
+  { href: '/cleaning', label: '清洗', icon: <Sparkles className="h-4 w-4" /> },
+  { href: '/analysis', label: '分析', icon: <BarChart3 className="h-4 w-4" /> },
+  { href: '/charts', label: '图表', icon: <PieChart className="h-4 w-4" /> },
+  { href: '/history', label: '历史', icon: <History className="h-4 w-4" /> },
+  { href: '/settings', label: '设置', icon: <Settings className="h-4 w-4" /> },
 ];
 
-export default function Sidebar({ collapsed }: { collapsed: boolean }) {
+function Logo() {
+  return (
+    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex-shrink-0">
+      <FlaskConical className="h-4 w-4 text-white" />
+    </div>
+  );
+}
+
+function DatasetPill() {
+  const currentDataset = useDataStore((s) => s.currentDataset);
+  return (
+    <div className="px-2 pb-2">
+      <div className="flex items-center gap-2 rounded-lg px-2.5 py-2 bg-white/[0.03] border border-white/5 min-w-0">
+        <Database className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0" />
+        <div className="min-w-0">
+          <p className="text-[11px] text-slate-400 truncate">
+            {currentDataset ? currentDataset.name : '未加载数据'}
+          </p>
+          {currentDataset && (
+            <p className="text-[10px] text-slate-500">{currentDataset.rowCount}行 × {currentDataset.colCount}列</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const uiTheme = useSettingsStore((s) => s.uiTheme);
-  const appearanceMode = useSettingsStore((s) => s.appearanceMode);
-  const t = getTheme(uiTheme);
-  const colors = appearanceMode === 'dark' ? t.dark : t.light;
-  const isKimi = uiTheme === 'kimi-minimal';
 
   return (
-    <div
-      style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: isKimi ? '8px 0' : '12px 0',
-        overflow: 'hidden',
-      }}
+    <aside
+      className={`fixed left-0 top-0 z-40 flex h-full flex-col border-r border-white/5 bg-black/40 backdrop-blur-2xl transition-all duration-300 ${
+        collapsed ? 'w-16' : 'w-56'
+      }`}
     >
-      {/* Logo area */}
-      <div
-        style={{
-          padding: collapsed ? '8px 12px' : '12px 16px',
-          marginBottom: isKimi ? 0 : 8,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          transition: 'all 0.2s ease-in-out',
-          borderBottom: isKimi && !collapsed ? `1px solid ${colors.border}` : 'none',
-        }}
-      >
-        <span style={{ fontSize: collapsed ? 18 : 22, lineHeight: 1 }}>
-          {isKimi ? '⚗' : '📊'}
-        </span>
-        {!collapsed && (
-          <span style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: colors.textPrimary,
-            whiteSpace: 'nowrap',
-          }}>
-            数据工作台
-          </span>
-        )}
+      {/* Logo */}
+      <div className="flex h-16 items-center justify-between border-b border-white/5 px-4">
+        <div className="flex items-center gap-2.5">
+          <Logo />
+          {!collapsed && <span className="text-sm font-bold tracking-tight text-white">WaveSight</span>}
+        </div>
       </div>
 
-      {/* Navigation */}
-      <Menu
-        mode="inline"
-        selectedKeys={[location.pathname]}
-        items={menuItems}
-        onClick={({ key }) => navigate(key)}
-        inlineCollapsed={collapsed}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          flex: 1,
-          paddingTop: isKimi ? 8 : 4,
-        }}
-      />
-    </div>
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        {NAV.map((item) => {
+          const isActive = location.pathname === item.href;
+          return (
+            <button
+              key={item.href}
+              onClick={() => navigate(item.href)}
+              className={`nav-link ${isActive ? 'active' : ''} ${collapsed ? 'justify-center px-0' : ''}`}
+              title={collapsed ? item.label : undefined}
+            >
+              {item.icon}
+              {!collapsed && <span>{item.label}</span>}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Dataset + collapse toggle */}
+      <div className="border-t border-white/5">
+        {!collapsed && <DatasetPill />}
+        <div className="p-2">
+          <button
+            onClick={onToggle}
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /> 收起</>}
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+export function MobileHeader() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentDataset = useDataStore((s) => s.currentDataset);
+
+  return (
+    <>
+      <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-white/5 bg-black/60 backdrop-blur-xl px-4 lg:hidden">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Logo />
+          <span className="text-sm font-bold text-white flex-shrink-0">WaveSight</span>
+          {currentDataset && (
+            <span className="tag text-[10px] text-indigo-300 border-indigo-500/20 bg-indigo-500/10 truncate">
+              {currentDataset.name}
+            </span>
+          )}
+        </div>
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white flex-shrink-0">
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </header>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)}>
+          <div className="fixed left-0 top-14 h-full w-52 bg-[#0a0a1a] border-r border-white/5 p-4" onClick={(e) => e.stopPropagation()}>
+            <nav className="space-y-1">
+              {NAV.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => { navigate(item.href); setMobileOpen(false); }}
+                    className={`nav-link ${isActive ? 'active' : ''}`}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
