@@ -5,12 +5,33 @@
  * time — force a synchronous re-render so `getDataURL` reads the current frame
  * instead of a cleared/blank buffer (P0-2).
  */
+import * as echarts from 'echarts';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function exportPNG(chartInstance: any, filename: string) {
   const zr = chartInstance?.getZr?.();
   try { zr?.refreshImmediately?.(); } catch { /* non-gl or unsupported */ }
   const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
   downloadURL(url, `${filename}.png`);
+}
+
+/** Export chart as vector SVG via a temporary SVG-renderer instance */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function exportSVG(chartInstance: any, filename: string): boolean {
+  try {
+    const div = document.createElement('div');
+    div.style.cssText = 'position:fixed;left:-99999px;top:0;width:800px;height:600px;';
+    document.body.appendChild(div);
+    const svgChart = echarts.init(div, undefined, { renderer: 'svg' });
+    svgChart.setOption(chartInstance.getOption());
+    const svgStr = svgChart.renderToSVGString();
+    svgChart.dispose();
+    div.remove();
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+    downloadURL(URL.createObjectURL(blob), `${filename}.svg`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Export chart source data as CSV */

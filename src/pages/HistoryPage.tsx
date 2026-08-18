@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Popconfirm } from 'antd';
+import { Popconfirm, Checkbox } from 'antd';
 import { Search, Download, Trash2, ChevronRight, Clock, BarChart3, Edit3, RotateCcw } from 'lucide-react';
 import PageHeader from '@/components/layout/PageHeader';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useDataStore } from '@/stores/useDataStore';
+import { useChartStore } from '@/stores/useChartStore';
 import { formatNumber } from '@/utils/format';
 import type { HistoryRecord } from '@/types/history';
 import type { AnalysisType } from '@/types/analysis';
@@ -56,15 +57,28 @@ function ResultTable({ title, headers, rows }: { title: string; headers: string[
 export default function HistoryPage() {
   const navigate = useNavigate();
   const { records, selectedId, setSelected, removeRecord, updateNote } = useHistoryStore();
+  const { removeChart } = useChartStore();
   const { setCurrentDataset } = useDataStore();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [deleteRelated, setDeleteRelated] = useState(false);
 
   const filtered = records.filter((r) => {
     if (search) { const t = r.analysisConfig.type ?? ''; if (!TYPE_LABELS[t]?.includes(search) && !r.datasetName.includes(search) && !r.note.includes(search)) return false; }
     if (typeFilter.length && !typeFilter.includes(r.analysisConfig.type ?? '')) return false;
+    if (dateFrom && new Date(r.createdAt).getTime() < new Date(`${dateFrom}T00:00:00`).getTime()) return false;
+    if (dateTo && new Date(r.createdAt).getTime() > new Date(`${dateTo}T23:59:59`).getTime()) return false;
     return true;
   });
+
+  const handleDelete = async (record: HistoryRecord) => {
+    if (deleteRelated && record.relatedChartIds.length) {
+      for (const chartId of record.relatedChartIds) await removeChart(chartId);
+    }
+    await removeRecord(record.id);
+  };
 
   const grouped = useMemo(() => {
     const m = new Map<string, HistoryRecord[]>();
@@ -94,14 +108,18 @@ export default function HistoryPage() {
             <input type="text" placeholder="搜索数据集名称..." className="input-field pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div className="flex gap-1.5 flex-wrap">
-            {Object.entries(TYPE_LABELS).map(([k, v]) => (
-              <button
-                key={k}
-                onClick={() => setTypeFilter((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k])}
-                className={`tab-btn ${typeFilter.includes(k) ? 'active' : ''}`}
-              >{v}</button>
-            ))}
+            <input type="date" title="开始日期" value={dateFrom} max={dateTo || undefined} className="input-field !w-36 !py-1.5" onChange={(e) => setDateFrom(e.target.value)} />
+            <input type="date" title="结束日期" value={dateTo} min={dateFrom || undefined} className="input-field !w-36 !py-1.5" onChange={(e) => setDateTo(e.target.value)} />
           </div>
+        </div>
+        <div className="flex gap-1.5 flex-wrap mt-3">
+          {Object.entries(TYPE_LABELS).map(([k, v]) => (
+            <button
+              key={k}
+              onClick={() => setTypeFilter((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k])}
+              className={`tab-btn ${typeFilter.includes(k) ? 'active' : ''}`}
+            >{v}</button>
+          ))}
         </div>
       </div>
 
@@ -154,7 +172,12 @@ export default function HistoryPage() {
                   </span>
                   <span className="tag">{new Date(selected.createdAt).toLocaleString('zh-CN')}</span>
                 </div>
-                <Popconfirm title="删除此条记录?" onConfirm={() => removeRecord(selected.id)}>
+                <Popconfirm
+                  title="删除此条记录?"
+                  description={selected.relatedChartIds.length > 0 ? `同时删除 ${selected.relatedChartIds.length} 张关联图表` : undefined}
+                  icon={null}
+                  onConfirm={() => handleDelete(selected)}
+                >
                   <button className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-white/5 transition">
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -184,6 +207,14 @@ export default function HistoryPage() {
                 <textarea className="input-field" rows={2} placeholder="添加备注..." value={selected.note} onChange={(e) => updateNote(selected.id, e.target.value)} />
               </div>
 
+              {selected.relatedChartIds.length > 0 && (
+                <div className="mb-4">
+                  <Checkbox checked={deleteRelated} onChange={(e) => setDeleteRelated(e.target.checked)}>
+                    <span className="text-xs text-slate-400">删除记录时同时删除 {selected.relatedChartIds.length} 张关联图表</span>
+                  </Checkbox>
+                </div>
+              )}
+
               <div className="flex gap-3">
                 {selected.relatedChartIds.length > 0 && (
                   <button className="btn-secondary text-xs" onClick={() => navigate('/charts')}>
@@ -193,7 +224,7 @@ export default function HistoryPage() {
                 <button className="btn-primary text-xs" onClick={async () => {
                   const cfg = selected.analysisConfig;
                   await setCurrentDataset(cfg.datasetId);
-                  navigate('/analysis');
+                  navigate('/analysis', { state: { prefill: cfg } });
                 }}>
                   <Edit3 className="h-3.5 w-3.5" /> 重新分析
                 </button>

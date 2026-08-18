@@ -1,7 +1,8 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button, Select, Table, Typography, Alert, Space, message, Spin, Descriptions, Divider, Checkbox, Tabs, Tooltip, Radio } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
+import { useLocation } from 'react-router-dom';
 import { PlayCircleOutlined, SaveOutlined, DownloadOutlined, CopyOutlined } from '@ant-design/icons';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
@@ -44,6 +45,33 @@ const ANALYSES: AnalysisDef[] = [
   { key: 'pca', label: '主成分分析 (PCA)', group: '建模', needs: { valueCols: 'multi' } },
   { key: 'pipeline', label: '全流程分析', group: '综合', needs: { valueCols: 'multi', groupCol: true, factorCols: '2-3', responseCol: true, pipeline: true } },
 ];
+
+/** 计算分组箱线图数据（whisker = 1.5×IQR，与图表页一致） */
+function boxplotSeries(rows: Record<string, unknown>[], valueCol: string, groupCol: string): { groups: string[]; box: number[][] } {
+  const m = new Map<string, number[]>();
+  for (const row of rows) {
+    const g = String(row[groupCol] ?? '');
+    const v = Number(row[valueCol]);
+    if (isNaN(v)) continue;
+    if (!m.has(g)) m.set(g, []);
+    m.get(g)!.push(v);
+  }
+  const groups: string[] = [];
+  const box: number[][] = [];
+  for (const [g, vals] of m.entries()) {
+    groups.push(g);
+    if (vals.length < 4) { box.push([0, 0, 0, 0, 0]); continue; }
+    const s = [...vals].sort((a, b) => a - b);
+    const q1 = s[Math.floor(s.length * 0.25)];
+    const q2 = s[Math.floor(s.length * 0.5)];
+    const q3 = s[Math.floor(s.length * 0.75)];
+    const iqr = q3 - q1;
+    const lower = Math.max(s[0], q1 - 1.5 * iqr);
+    const upper = Math.min(s[s.length - 1], q3 + 1.5 * iqr);
+    box.push([+lower.toFixed(4), +q1.toFixed(4), +q2.toFixed(4), +q3.toFixed(4), +upper.toFixed(4)]);
+  }
+  return { groups, box };
+}
 
 export default function AnalysisPage() {
   const { currentDataset, getNumericColumns, getCategoricalColumns } = useDataStore();
@@ -92,7 +120,23 @@ export default function AnalysisPage() {
         }
         case 'normality': {
           const r = runNormality(rows, valueCols.length ? valueCols : numericCols, alpha);
-          result = { tables: [r.table], conclusion: '', chartData: Object.entries(r.qqData).map(([col, d]) => ({ chartType: 'qq', title: `Q-Q 图: ${col}`, data: d })) };
+          const chartData = Object.entries(r.qqData).map(([col, d]) => ({
+            chartType: 'qq',
+            title: `Q-Q 图: ${col}`,
+            data: {
+              backgroundColor: '#fff',
+              title: { text: `Q-Q 图: ${col}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+              tooltip: {},
+              grid: { left: 60, right: 30, top: 45, bottom: 45 },
+              xAxis: { type: 'value', name: '理论分位数', nameTextStyle: { fontFamily: 'Times New Roman' } },
+              yAxis: { type: 'value', name: '样本分位数', nameTextStyle: { fontFamily: 'Times New Roman' } },
+              series: [
+                { type: 'scatter', data: d.theoretical.map((th, i) => [+th.toFixed(5), +d.sample[i].toFixed(5)]), symbolSize: 5, itemStyle: { color: '#5470c6' } },
+                { type: 'line', data: [[d.theoretical[0], d.theoretical[0]], [d.theoretical[d.theoretical.length - 1], d.theoretical[d.theoretical.length - 1]]], symbol: 'none', lineStyle: { color: '#ccc', type: 'dashed' as const } },
+              ],
+            },
+          }));
+          result = { tables: [r.table], conclusion: '', chartData };
           break;
         }
         case 'grouped-stats':
@@ -101,7 +145,22 @@ export default function AnalysisPage() {
         case 'ttest-independent': {
           if (valueCols[0] && groupCol) {
             const r = runIndependentTTest(rows, valueCols[0], groupCol, alpha);
-            result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'boxplot', title: `${valueCols[0]} 按 ${groupCol}`, data: { valueCol: valueCols[0], groupCol } }] };
+            const bp = boxplotSeries(rows, valueCols[0], groupCol);
+            result = {
+              tables: [r.table], conclusion: r.conclusion,
+              chartData: [{
+                chartType: 'boxplot', title: `${valueCols[0]} 按 ${groupCol}`,
+                data: {
+                  backgroundColor: '#fff',
+                  title: { text: `${valueCols[0]} 按 ${groupCol}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+                  tooltip: {},
+                  grid: { left: 60, right: 30, top: 45, bottom: 45 },
+                  xAxis: { type: 'category', data: bp.groups, name: groupCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
+                  yAxis: { type: 'value', name: valueCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
+                  series: [{ type: 'boxplot', data: bp.box, itemStyle: { borderColor: '#5470c6' } }],
+                },
+              }],
+            };
           }
           break;
         }
@@ -116,26 +175,91 @@ export default function AnalysisPage() {
           if (valueCols[0] && groupCol) {
             const r = runOneWayANOVA(rows, valueCols[0], groupCol, alpha);
             const tukey = runTukeyHSD(rows, valueCols[0], groupCol, alpha);
-            result = { tables: [r.table, tukey], conclusion: r.conclusion, chartData: [{ chartType: 'boxplot', title: `ANOVA: ${valueCols[0]}`, data: { valueCol: valueCols[0], groupCol } }] };
+            const bp = boxplotSeries(rows, valueCols[0], groupCol);
+            result = {
+              tables: [r.table, tukey], conclusion: r.conclusion,
+              chartData: [{
+                chartType: 'boxplot', title: `ANOVA: ${valueCols[0]}`,
+                data: {
+                  backgroundColor: '#fff',
+                  title: { text: `ANOVA: ${valueCols[0]}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+                  tooltip: {},
+                  grid: { left: 60, right: 30, top: 45, bottom: 45 },
+                  xAxis: { type: 'category', data: bp.groups, name: groupCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
+                  yAxis: { type: 'value', name: valueCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
+                  series: [{ type: 'boxplot', data: bp.box, itemStyle: { borderColor: '#5470c6' } }],
+                },
+              }],
+            };
           }
           break;
         }
         case 'correlation': {
           const r = runCorrelation(rows, valueCols.length ? valueCols : numericCols, corrMethod);
-          result = { tables: [r.table], conclusion: '', chartData: [{ chartType: 'heatmap', title: `${corrMethod} 相关矩阵`, data: { cols: valueCols.length ? valueCols : numericCols, matrix: r.matrix } }] };
+          const corrCols = valueCols.length ? valueCols : numericCols;
+          const hmData: [number, number, number][] = [];
+          r.matrix.forEach((rowV, i) => rowV.forEach((v, j) => hmData.push([j, i, v])));
+          const hmMax = Math.max(...hmData.map((d) => Math.abs(d[2])), 0.1);
+          result = {
+            tables: [r.table], conclusion: '',
+            chartData: [{
+              chartType: 'heatmap', title: `${corrMethod} 相关矩阵`,
+              data: {
+                backgroundColor: '#fff',
+                title: { text: `${corrMethod} 相关矩阵`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+                tooltip: {},
+                grid: { left: 90, right: 80, top: 30, bottom: 45 },
+                xAxis: { type: 'category', data: corrCols, position: 'top', axisLabel: { rotate: 45, fontSize: 10 } },
+                yAxis: { type: 'category', data: corrCols, inverse: true },
+                visualMap: { min: -hmMax, max: hmMax, calculable: true, orient: 'vertical', right: 10,
+                  inRange: { color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] } },
+                series: [{ type: 'heatmap', data: hmData, label: { show: true, fontSize: 10 } }],
+              },
+            }],
+          };
           break;
         }
         case 'linear-regression': {
           if (xCols.length && yCol) {
             const r = runLinearRegression(rows, xCols, yCol);
-            result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'scatter', title: `${yCol} 拟合`, data: { fitted: r.fittedValues, residuals: r.residuals, xCols, yCol } }] };
+            // 残差诊断图：拟合值 vs 残差（完整 ECharts option，避免函数剥离/原始数据误用）
+            const residData = r.fittedValues.map((f, i) => [+(+f).toFixed(5), +(+r.residuals[i]).toFixed(5)]);
+            const fitMin = Math.min(...r.fittedValues), fitMax = Math.max(...r.fittedValues);
+            const residOption = {
+              backgroundColor: '#fff',
+              title: { text: `${yCol} 残差诊断图`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+              tooltip: {},
+              grid: { left: 60, right: 30, top: 50, bottom: 45 },
+              xAxis: { type: 'value', name: '拟合值', nameTextStyle: { fontFamily: 'Times New Roman' } },
+              yAxis: { type: 'value', name: '残差', nameTextStyle: { fontFamily: 'Times New Roman' } },
+              series: [
+                { type: 'scatter', data: residData, symbolSize: 5, itemStyle: { color: '#91cc75' } },
+                { type: 'line', data: [[fitMin, 0], [fitMax, 0]], symbol: 'none', lineStyle: { color: '#ccc', type: 'dashed' as const } },
+              ],
+            };
+            result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'scatter', title: `${yCol} 残差诊断图`, data: residOption }] };
           }
           break;
         }
         case 'nonlinear-fit': {
           if (xCols[0] && yCol) {
             const r = runNonlinearFit(rows, xCols[0], yCol, modelName);
-            result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'scatter', title: `${modelName} 拟合: ${yCol}`, data: r.fitted }] };
+            // 拟合曲线图：原始数据散点 + 模型曲线（完整 option）
+            const rawData = rows.map((row) => [Number(row[xCols[0]]), Number(row[yCol])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
+            const curveData = r.fitted.map((d) => [+(+d.x).toFixed(5), +(+d.y).toFixed(5)]);
+            const fitOption = {
+              backgroundColor: '#fff',
+              title: { text: `${modelName} 拟合: ${yCol}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+              tooltip: {},
+              grid: { left: 60, right: 30, top: 50, bottom: 45 },
+              xAxis: { type: 'value', name: xCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
+              yAxis: { type: 'value', name: yCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
+              series: [
+                { type: 'scatter', name: '观测值', data: rawData, symbolSize: 5, itemStyle: { color: '#5470c6' } },
+                { type: 'line', name: '拟合曲线', data: curveData, symbol: 'none', lineStyle: { color: '#d00', width: 2 } },
+              ],
+            };
+            result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'scatter', title: `${modelName} 拟合曲线: ${yCol}`, data: fitOption }] };
           }
           break;
         }
@@ -175,7 +299,57 @@ export default function AnalysisPage() {
         }
         case 'pca': {
           const r = runPCA(rows, valueCols.length ? valueCols : numericCols);
-          result = { tables: [r.table], conclusion: '', chartData: [{ chartType: 'scatter', title: 'PCA 得分图', data: r.scores }] };
+          const pcs = valueCols.length ? valueCols : numericCols;
+          // 碎石图：特征值柱状 + 累计方差贡献率折线（双轴，完整 option）
+          const totalVar = r.eigenvalues.reduce((a, b) => a + b, 0);
+          let cum = 0;
+          const cumVals = r.eigenvalues.map((ev) => { cum += ev / totalVar; return +(cum * 100).toFixed(1); });
+          const pcaLabels = r.eigenvalues.map((_, i) => `PC${i + 1}`);
+          const screeOption = {
+            backgroundColor: '#fff',
+            title: { text: 'PCA 碎石图', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+            tooltip: {},
+            legend: { data: ['特征值', '累计贡献率 %'], bottom: 5 },
+            grid: { left: 55, right: 55, top: 45, bottom: 55 },
+            xAxis: { type: 'category', data: pcaLabels },
+            yAxis: [
+              { type: 'value', name: '特征值', nameTextStyle: { fontFamily: 'Times New Roman' } },
+              { type: 'value', name: '累计贡献率 %', max: 100, nameTextStyle: { fontFamily: 'Times New Roman' } },
+            ],
+            series: [
+              { type: 'bar', name: '特征值', data: r.eigenvalues.map((ev) => +ev.toFixed(4)), itemStyle: { color: '#5470c6' } },
+              { type: 'line', name: '累计贡献率 %', yAxisIndex: 1, data: cumVals, symbolSize: 6, lineStyle: { color: '#d00' }, itemStyle: { color: '#d00' } },
+            ],
+          };
+          // 载荷矩阵（PC1/PC2 双载荷散点）+ 得分散点图
+          const loadingData = pcs.map((col, i) => ({ name: col, value: [+(+r.loadings[i][0]).toFixed(4), +(+r.loadings[i][1]).toFixed(4)] }));
+          const loadingsOption = {
+            backgroundColor: '#fff',
+            title: { text: 'PCA 载荷图 (PC1 vs PC2)', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+            tooltip: { formatter: (p: unknown) => { const v = (p as { data: { name: string; value: number[] } }).data; return `${v?.name}: (${v?.value?.[0]}, ${v?.value?.[1]})`; } },
+            grid: { left: 60, right: 30, top: 45, bottom: 45 },
+            xAxis: { type: 'value', name: 'PC1', nameTextStyle: { fontFamily: 'Times New Roman' } },
+            yAxis: { type: 'value', name: 'PC2', nameTextStyle: { fontFamily: 'Times New Roman' } },
+            series: [{ type: 'scatter', data: loadingData, symbolSize: 9, itemStyle: { color: '#5470c6' } }],
+          };
+          const scoresOption = {
+            backgroundColor: '#fff',
+            title: { text: 'PCA 得分散点图 (PC1 vs PC2)', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+            tooltip: {},
+            grid: { left: 60, right: 30, top: 45, bottom: 45 },
+            xAxis: { type: 'value', name: 'PC1', nameTextStyle: { fontFamily: 'Times New Roman' } },
+            yAxis: { type: 'value', name: 'PC2', nameTextStyle: { fontFamily: 'Times New Roman' } },
+            series: [{ type: 'scatter', data: r.scores.map((s) => [+s[0].toFixed(4), +s[1].toFixed(4)]), symbolSize: 6, itemStyle: { color: '#91cc75' } }],
+          };
+          result = {
+            tables: [r.table],
+            conclusion: '',
+            chartData: [
+              { chartType: 'bar', title: 'PCA 碎石图', data: screeOption },
+              { chartType: 'scatter', title: 'PCA 载荷图', data: loadingsOption },
+              { chartType: 'scatter', title: 'PCA 得分散点图', data: scoresOption },
+            ],
+          };
           break;
         }
         case 'pipeline': {
@@ -276,7 +450,18 @@ export default function AnalysisPage() {
             const pc1 = pca.eigenvalues[0] / totalVar;
             const pc2 = (pca.eigenvalues[0] + pca.eigenvalues[1]) / totalVar;
             conclusions.push(`PCA: PC1解释 ${(pc1 * 100).toFixed(1)}%, 前2成分累计 ${(pc2 * 100).toFixed(1)}%`);
-            chartData.push({ chartType: 'scatter', title: 'PCA 得分图 (PC1 vs PC2)', data: pca.scores });
+            chartData.push({
+              chartType: 'scatter', title: 'PCA 得分图 (PC1 vs PC2)',
+              data: {
+                backgroundColor: '#fff',
+                title: { text: 'PCA 得分图 (PC1 vs PC2)', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+                tooltip: {},
+                grid: { left: 60, right: 30, top: 45, bottom: 45 },
+                xAxis: { type: 'value', name: 'PC1', nameTextStyle: { fontFamily: 'Times New Roman' } },
+                yAxis: { type: 'value', name: 'PC2', nameTextStyle: { fontFamily: 'Times New Roman' } },
+                series: [{ type: 'scatter', data: pca.scores.map((s) => [+s[0].toFixed(4), +s[1].toFixed(4)]), symbolSize: 6, itemStyle: { color: '#91cc75' } }],
+              },
+            });
           }
 
           result = { tables, conclusion: conclusions.join(' | '), chartData };
@@ -302,11 +487,37 @@ export default function AnalysisPage() {
     } finally { setRunning(false); }
   }, [currentDataset, analysisType, valueCols, groupCol, xCols, yCol, factorCols, responseCol, pairedCol1, pairedCol2, corrMethod, modelName, alpha, numericCols, addRecord]);
 
+  const location = useLocation();
+  const runRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => { runRef.current = run; });
+  const prefillApplied = useRef(false);
+  // 从历史记录"重新分析"进入：预填变量并自动运行
+  useEffect(() => {
+    if (prefillApplied.current) return;
+    const prefill = (location.state as { prefill?: AnalysisConfig } | null)?.prefill;
+    if (!prefill) return;
+    prefillApplied.current = true;
+    setAnalysisType(prefill.type);
+    setValueCols(prefill.valueCols ?? []);
+    setGroupCol(prefill.groupCol);
+    setXCols(prefill.xCols ?? []);
+    setYCol(prefill.yCol);
+    setFactorCols(prefill.factorCols ?? []);
+    setResponseCol(prefill.responseCol);
+    setPairedCol1(prefill.pairedCol1);
+    setPairedCol2(prefill.pairedCol2);
+    if (prefill.method) setCorrMethod(prefill.method);
+    if (prefill.modelName) setModelName(prefill.modelName);
+    const t = setTimeout(() => { void runRef.current(); }, 60);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
+
   const saveChartToModule = async (chartData: ChartDataSource) => {
     const cfg: ChartConfig = {
       id: generateId(), title: chartData.title, chartType: chartData.chartType as ChartType,
       datasetId: currentDataset!.id, columnMapping: {}, echartsOption: chartData.data as Record<string, unknown>,
-      colorScheme: 'grayscale', legendPosition: 'right', fontSize: 12,
+      colorScheme: 'grayscale', legendPosition: 'right', fontSize: 0,
       xAxisLabel: '', yAxisLabel: '', createdAt: Date.now(),
       sourceAnalysisId: analysisType ?? undefined,
     };

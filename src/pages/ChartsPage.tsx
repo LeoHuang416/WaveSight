@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { Card, Button, Input, Select, Space, Typography, Empty, Popconfirm, message, Radio } from 'antd';
+import { Card, Button, Input, Select, Space, Typography, Empty, Popconfirm, message, Radio, InputNumber } from 'antd';
 import { PlusOutlined, DeleteOutlined, DownloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
 import PageHeader from '@/components/layout/PageHeader';
 import { useChartStore } from '@/stores/useChartStore';
 import { useDataStore } from '@/stores/useDataStore';
-import { exportPNG, exportCSV } from '@/utils/export';
+import { exportPNG, exportSVG, exportCSV } from '@/utils/export';
 import { generateId, formatNumber } from '@/utils/format';
 import { buildContourOption } from '@/engine/rsmCharts';
-import type { ChartConfig, ChartType, ColorScheme } from '@/types/chart';
+import type { ChartConfig, ChartType, ColorScheme, LegendPosition } from '@/types/chart';
 
 const { Text } = Typography;
 const { Search } = Input;
@@ -22,6 +22,43 @@ const CHART_LABELS: Record<ChartType, string> = {
 
 const GRAY = ['#1a1a1a', '#4d4d4d', '#808080', '#b3b3b3', '#d9d9d9', '#f0f0f0'];
 const COLOR = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
+
+/** 把编辑器配置（轴标签/轴范围/图例位置/字号）合并进任意 ECharts option */
+function applyEditor(option: Record<string, unknown> | undefined, c: ChartConfig): Record<string, unknown> {
+  if (!option || typeof option !== 'object') return option ?? {};
+  const out = { ...option };
+  if (c.fontSize && out.title && typeof out.title === 'object') {
+    const t = out.title as Record<string, unknown>;
+    out.title = { ...t, textStyle: { ...((t.textStyle as Record<string, unknown>) ?? {}), fontSize: c.fontSize } };
+  }
+  const decorate = (axis: unknown, name: string | undefined, rangeMin: number | undefined, rangeMax: number | undefined): unknown => {
+    if (!axis || typeof axis !== 'object') return axis;
+    const a = { ...(axis as Record<string, unknown>) };
+    if (name) a.name = name;
+    if (rangeMin !== undefined && !isNaN(rangeMin)) a.min = rangeMin;
+    if (rangeMax !== undefined && !isNaN(rangeMax)) a.max = rangeMax;
+    if (c.fontSize) {
+      a.nameTextStyle = { ...((a.nameTextStyle as Record<string, unknown>) ?? {}), fontSize: c.fontSize };
+      a.axisLabel = { ...((a.axisLabel as Record<string, unknown>) ?? {}), fontSize: c.fontSize };
+    }
+    return a;
+  };
+  const decorateKey = (key: 'xAxis' | 'yAxis', name: string | undefined) => {
+    const raw = out[key];
+    if (Array.isArray(raw)) out[key] = raw.map((ax) => decorate(ax, name, key === 'yAxis' ? c.yAxisMin : undefined, key === 'yAxis' ? c.yAxisMax : undefined));
+    else out[key] = decorate(raw, name, key === 'yAxis' ? c.yAxisMin : undefined, key === 'yAxis' ? c.yAxisMax : undefined);
+  };
+  decorateKey('xAxis', c.xAxisLabel);
+  decorateKey('yAxis', c.yAxisLabel);
+  if (c.legendPosition && c.legendPosition !== 'right') {
+    const pos = c.legendPosition === 'top' ? { top: 5 }
+      : c.legendPosition === 'bottom' ? { bottom: 5 }
+      : c.legendPosition === 'left' ? { left: 5 }
+      : { right: 5 };
+    out.legend = { ...((out.legend as Record<string, unknown>) ?? {}), ...pos };
+  }
+  return out;
+}
 
 function simpleOption(
   dataset: ReturnType<typeof useDataStore.getState>['currentDataset'],
@@ -62,7 +99,31 @@ function simpleOption(
       const bins = Array(binCount).fill(0);
       histVals.forEach((v) => { const idx = Math.min(Math.floor((v - min) / binWidth), binCount - 1); bins[idx]++; });
       const binLabels = bins.map((_, i) => `${(min + i * binWidth).toFixed(1)}`);
-      return { ...base, xAxis: { type: 'category', data: binLabels }, yAxis: { type: 'value' }, series: [{ type: 'bar', data: bins, barCategoryGap: '5%' }] };
+      // KDE 曲线（高斯核，Silverman 带宽）：缩放为频数尺度叠加在直方图上
+      const n = histVals.length;
+      const kdeMean = histVals.reduce((a, b) => a + b, 0) / n;
+      const kdeStd = Math.sqrt(histVals.reduce((s, v) => s + (v - kdeMean) ** 2, 0) / n) || (max - min) / 4 || 1;
+      const h = 1.06 * kdeStd * Math.pow(n, -1 / 5);
+      const steps = 50;
+      const kdeData: [number, number][] = [];
+      for (let i = 0; i <= steps; i++) {
+        const x = min + ((max - min) * i) / steps;
+        let sum = 0;
+        for (const v of histVals) sum += Math.exp(-0.5 * ((x - v) / h) ** 2);
+        kdeData.push([+((i * (binCount - 1)) / steps).toFixed(4), +(sum / (n * h * Math.sqrt(2 * Math.PI)) * n * binWidth).toFixed(3)]);
+      }
+      return {
+        ...base,
+        xAxis: [
+          { type: 'category', data: binLabels },
+          { type: 'value', min: -0.5, max: binCount - 0.5, show: false },
+        ],
+        yAxis: { type: 'value' },
+        series: [
+          { type: 'bar', data: bins, barCategoryGap: '5%' },
+          { type: 'line', name: 'KDE', xAxisIndex: 1, data: kdeData, symbol: 'none', smooth: true, lineStyle: { color: '#d00', width: 2 } },
+        ],
+      };
     }
     case 'boxplot': {
       const boxData = nums.slice(0, 5).map((col) => {
@@ -202,25 +263,7 @@ function simpleOption(
         errSDs.push(+sd.toFixed(2));
       });
       if (errMeans.length === 0) return { ...base, series: [{ type: 'bar', data: [] }] };
-      // Error bar data: [yMin, yMax] for each column
-      const errData = errMeans.map((m, i) => [m - errSDs[i], m + errSDs[i]]);
-      return {
-        ...base,
-        xAxis: { type: 'category', data: errCols },
-        yAxis: { type: 'value', name: '均值 ± 1 SD' },
-        series: [
-          { type: 'bar', data: errMeans, name: '均值', barWidth: '50%' },
-          { type: 'custom', name: '误差棒', data: errData,
-            renderItem: (_params: unknown, api: Record<string, CallableFunction>) => {
-              const xValue = api.value(0);
-              const yMin = api.value(0) - api.value(1); // This is tricky with custom renderer
-              // Use a simpler approach with two scatter series
-              return { type: 'group', children: [] };
-            },
-          },
-        ],
-      };
-      // Simpler approach: use markPoint/markLine or a separate scatter series for error bars
+      // Error bars via scatter series + markLine (bar ± 1 SD), one line per column
       const errBarData = errCols.map((_col, i) => [errMeans[i], errSDs[i], i]);
       return {
         ...base,
@@ -449,10 +492,10 @@ export default function ChartsPage() {
   const renderOption = (c: ChartConfig): Record<string, unknown> => {
     const needs = c.chartType === 'contour' || c.chartType === 'surface3d' || c.chartType === 'errorbar';
     if (needs && !c.sourceAnalysisId && currentDataset && c.datasetId === currentDataset.id) {
-      try { return simpleOption(currentDataset, c.chartType, c.title, c.colorScheme, c.columnMapping as Record<string, string>); }
+      try { return applyEditor(simpleOption(currentDataset, c.chartType, c.title, c.colorScheme, c.columnMapping as Record<string, string>), c); }
       catch { /* 重建失败则回退到存储的剥离版 option */ }
     }
-    return c.echartsOption;
+    return applyEditor(c.echartsOption, c);
   };
 
   const handleNew = () => {
@@ -518,7 +561,27 @@ export default function ChartsPage() {
               <Radio.Group value={chart.colorScheme} onChange={(e) => { const v = e.target.value as ColorScheme; addChart({ ...chart, colorScheme: v, echartsOption: simpleOption(currentDataset, chart.chartType, chart.title, v, chart.columnMapping as Record<string, string>) }); }}>
                 <Radio value="grayscale">学术灰度</Radio><Radio value="color">彩色</Radio>
               </Radio.Group>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>X 轴标签（留空自动）</Text>
+                <Input size="small" value={chart.xAxisLabel} placeholder="X 轴名称" onChange={(e) => addChart({ ...chart, xAxisLabel: e.target.value })} />
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>Y 轴标签（留空自动）</Text>
+                <Input size="small" value={chart.yAxisLabel} placeholder="Y 轴名称" onChange={(e) => addChart({ ...chart, yAxisLabel: e.target.value })} />
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>Y 轴范围（留空自动）</Text>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <InputNumber size="small" style={{ width: '100%' }} placeholder="min" value={chart.yAxisMin}
+                    onChange={(v) => addChart({ ...chart, yAxisMin: v ?? undefined })} />
+                  <InputNumber size="small" style={{ width: '100%' }} placeholder="max" value={chart.yAxisMax}
+                    onChange={(v) => addChart({ ...chart, yAxisMax: v ?? undefined })} />
+                </div>
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>图例位置</Text>
+                <Select size="small" value={chart.legendPosition} onChange={(v: LegendPosition) => addChart({ ...chart, legendPosition: v })}
+                  options={[{ label: '右上', value: 'right' }, { label: '上', value: 'top' }, { label: '下', value: 'bottom' }, { label: '左', value: 'left' }]} />
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>字体大小</Text>
+                <Select size="small" value={chart.fontSize} onChange={(v: number) => addChart({ ...chart, fontSize: v })}
+                  options={[10, 12, 14, 16, 18, 20].map((n) => ({ label: `${n}px`, value: n }))} />
+              </div>
               <Button icon={<DownloadOutlined />} onClick={() => echartsRef && exportPNG(echartsRef.getEchartsInstance(), chart.title)} block>导出 PNG</Button>
+              <Button icon={<DownloadOutlined />} onClick={() => { if (echartsRef) { if (!exportSVG(echartsRef.getEchartsInstance(), chart.title)) message.warning('3D 图表不支持 SVG 导出，请使用 PNG'); } }} block>导出 SVG</Button>
               <Button icon={<DownloadOutlined />} onClick={() => { if (currentDataset) exportCSV(currentDataset.columns.map((c) => c.name), currentDataset.rows.map((r) => currentDataset.columns.map((c) => String(r[c.name] ?? ''))), chart.title); }} block>导出 CSV</Button>
               <Popconfirm title="确认删除?" onConfirm={() => { removeChart(chart.id); setViewMode('gallery'); }}><Button danger icon={<DeleteOutlined />} block>删除</Button></Popconfirm>
             </Space>

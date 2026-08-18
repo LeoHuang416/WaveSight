@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { message } from 'antd';
 import {
   Upload, FileText, Activity, Clock, TrendingUp, Database, BarChart3,
   PieChart, Sparkles, ChevronRight, ArrowRight,
@@ -7,7 +8,9 @@ import {
 import { useDataStore } from '@/stores/useDataStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useChartStore } from '@/stores/useChartStore';
+import { saveDataset } from '@/db/operations';
 import DataTable from '@/components/data/DataTable';
+import type { ColumnMeta } from '@/types/data';
 
 const ACTION_TYPE: Record<string, { label: string; color: string }> = {
   descriptive: { label: '描述', color: 'text-purple-400 bg-purple-500/10' },
@@ -49,17 +52,51 @@ export default function HomePage() {
   const currentDataset = useDataStore((s) => s.currentDataset);
   const datasetList = useDataStore((s) => s.datasetList);
   const refreshDatasetList = useDataStore((s) => s.refreshDatasetList);
+  const updateCurrentDataset = useDataStore((s) => s.updateCurrentDataset);
   const records = useHistoryStore((s) => s.records);
   const refreshHistory = useHistoryStore((s) => s.refresh);
   const charts = useChartStore((s) => s.charts);
   const refreshCharts = useChartStore((s) => s.refresh);
+
+  const columnMenuItems = (col: ColumnMeta): NonNullable<import('antd').MenuProps['items']> => {
+    const isGroup = currentDataset?.experimentGroupCol === col.name;
+    return [
+      { key: isGroup ? 'unset-group' : 'set-group', label: isGroup ? '取消设为分组列' : '设为实验分组列' },
+      { key: col.role === 'metadata' ? 'unignore' : 'ignore', label: col.role === 'metadata' ? '取消忽略此列' : '忽略此列（不参与分析）' },
+    ];
+  };
+
+  const handleColumnMenu = async (key: string, col: ColumnMeta) => {
+    if (!currentDataset) return;
+    const ds = JSON.parse(JSON.stringify(currentDataset)) as typeof currentDataset;
+    if (key === 'set-group') {
+      ds.experimentGroupCol = col.name;
+      const target = ds.columns.find((c) => c.name === col.name);
+      if (target && target.role === 'unknown') target.role = 'independent';
+      message.success(`已将 "${col.name}" 设为实验分组列`);
+    } else if (key === 'unset-group') {
+      ds.experimentGroupCol = undefined;
+      message.success(`已取消分组列 "${col.name}"`);
+    } else if (key === 'ignore') {
+      const target = ds.columns.find((c) => c.name === col.name);
+      if (target) target.role = 'metadata';
+      message.success(`已忽略列 "${col.name}"`);
+    } else if (key === 'unignore') {
+      const target = ds.columns.find((c) => c.name === col.name);
+      if (target) target.role = 'unknown';
+      message.success(`已恢复列 "${col.name}"`);
+    } else {
+      return;
+    }
+    updateCurrentDataset(ds);
+    await saveDataset(ds);
+  };
 
   useEffect(() => {
     refreshDatasetList();
     refreshHistory();
     refreshCharts();
   }, [refreshDatasetList, refreshHistory, refreshCharts]);
-
   const latestRecord = records[0];
   const latestChart = charts[0];
 
@@ -130,7 +167,7 @@ export default function HomePage() {
               管理数据 <ChevronRight className="h-3 w-3" />
             </button>
           </div>
-          <DataTable dataset={currentDataset} maxRows={8} />
+          <DataTable dataset={currentDataset} maxRows={8} columnMenuItems={columnMenuItems} onColumnMenuClick={handleColumnMenu} />
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from './index';
-import { saveDataset, getDataset, getAllDatasets, deleteDataset, getStorageStats, clearAllData, saveChart, getAllCharts, saveHistory, getAllHistory } from './operations';
+import { saveDataset, getDataset, getAllDatasets, deleteDataset, getStorageStats, clearAllData, saveChart, getAllCharts, saveHistory, getAllHistory, cleanupHistory } from './operations';
 import type { Dataset } from '@/types/data';
 import type { ChartConfig } from '@/types/chart';
 import type { HistoryRecord } from '@/types/history';
@@ -93,5 +93,31 @@ describe('chart/history persistence (function stripping)', () => {
     const all = await getAllHistory();
     expect(all).toHaveLength(1);
     expect(all[0].result).toBeDefined();
+  });
+
+  it('cleanupHistory deletes only records older than retention days', async () => {
+    const now = Date.now();
+    const mk = (id: string, createdAt: number): HistoryRecord => ({
+      id, datasetName: 'd', note: '', relatedChartIds: [], createdAt,
+      analysisConfig: { datasetId: 'd' } as never,
+      result: { tables: [], conclusion: '' } as never,
+    });
+    await saveHistory(mk('old', now - 200 * 24 * 3600 * 1000));
+    await saveHistory(mk('recent', now - 10 * 24 * 3600 * 1000));
+    const removed = await cleanupHistory(90);
+    expect(removed).toBe(1);
+    const all = await getAllHistory();
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe('recent');
+  });
+
+  it('cleanupHistory ignores invalid retention (no deletion)', async () => {
+    await saveHistory({
+      id: 'hx', datasetName: 'd', note: '', relatedChartIds: [], createdAt: 1,
+      analysisConfig: { datasetId: 'd' } as never,
+      result: { tables: [], conclusion: '' } as never,
+    });
+    expect(await cleanupHistory(0)).toBe(0);
+    expect(await getAllHistory()).toHaveLength(1);
   });
 });

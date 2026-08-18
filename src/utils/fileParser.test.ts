@@ -83,6 +83,38 @@ describe('parseFile', () => {
     expect(result.headers).toEqual(['a', 'b']);
     expect(result.rows).toHaveLength(2);
   });
+
+  it('loadFullFile large file (>5MB) keeps real column names', async () => {
+    // Each data row is ~130 chars → 43,000 rows ≈ 5.6MB → triggers the chunked path
+    const line = 'Alice,90,' + 'x'.repeat(120) + '\n';
+    const big = 'name,score,extra\n' + line.repeat(43000);
+    const file = makeCSVFile(big, 'big.csv');
+    const result = await loadFullFile(file, { hasHeader: true, skipRows: 0, delimiter: ',' });
+    expect(result.headers).toEqual(['name', 'score', 'extra']);
+    expect(result.rows).toHaveLength(43000);
+    expect(result.rows[0].name).toBe('Alice');
+    expect(result.rows[0].score).toBe('90');
+  });
+
+  it('loadFullFile large file (>5MB) without header generates column names', async () => {
+    const line = '10,20,' + 'y'.repeat(120) + '\n';
+    const big = line.repeat(43000);
+    const file = makeCSVFile(big, 'big.csv');
+    const result = await loadFullFile(file, { hasHeader: false, skipRows: 0, delimiter: ',' });
+    expect(result.headers).toHaveLength(3);
+    expect(result.headers[0]).toMatch(/列\d+/);
+    expect(result.rows).toHaveLength(43000);
+    expect(result.rows[0][result.headers[0]]).toBe('10');
+  });
+
+  it('loadFullFile large file (>5MB) supports skipRows', async () => {
+    const line = 'Alice,90,' + 'x'.repeat(120) + '\n';
+    const big = 'name,score,extra\n' + line.repeat(43000);
+    const file = makeCSVFile(big, 'big.csv');
+    const result = await loadFullFile(file, { hasHeader: true, skipRows: 10, delimiter: ',' });
+    expect(result.rows).toHaveLength(42990);
+    expect(result.headers).toEqual(['name', 'score', 'extra']);
+  });
 });
 
 describe('validateFileSize', () => {

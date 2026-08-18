@@ -55,6 +55,24 @@ describe('runNormality', () => {
     expect(result.table.headers[4]).toContain('0.01');
     // With only 5 samples, normality test is inconclusive; just verify the header changes
   });
+  it('adds Kolmogorov-Smirnov D and p-value columns', () => {
+    const result = runNormality(rows, ['x']);
+    expect(result.table.headers).toContain('K-S D');
+    expect(result.table.headers).toContain('K-S p 值');
+    const d = result.table.rows[0][5] as number;
+    const ksP = result.table.rows[0][6] as number;
+    expect(d).toBeGreaterThan(0);
+    expect(d).toBeLessThanOrEqual(1);
+    expect(ksP).toBeGreaterThanOrEqual(0);
+    expect(ksP).toBeLessThanOrEqual(1);
+  });
+  it('K-S detects non-normal data', () => {
+    // 100 values from a heavily right-skewed distribution (exp(0)..exp(10))
+    const skewed = Array.from({ length: 100 }, (_, i) => Math.exp(i / 10));
+    const result = runNormality(skewed.map((v) => ({ v: String(v) })), ['v']);
+    const p = result.table.rows[0][6] as number;
+    expect(p).toBeLessThan(0.001);
+  });
 });
 
 describe('runGroupedStats', () => {

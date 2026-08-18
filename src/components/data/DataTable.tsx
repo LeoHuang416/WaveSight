@@ -1,6 +1,7 @@
-import { Table } from 'antd';
+import { Table, Dropdown } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { Dataset } from '@/types/data';
+import type { MenuProps } from 'antd';
+import type { Dataset, ColumnMeta } from '@/types/data';
 import { useSettingsStore, ROW_HEIGHT_MAP, FONT_SIZE_MAP } from '@/stores/useSettingsStore';
 import { getTheme } from '@/themes';
 
@@ -8,9 +9,12 @@ interface DataTableProps {
   dataset: Dataset;
   highlightCells?: { row: number; col: string; color: string }[];
   maxRows?: number;
+  /** 列头右键菜单项（不传则禁用右键菜单） */
+  columnMenuItems?: (col: ColumnMeta) => NonNullable<MenuProps['items']>;
+  onColumnMenuClick?: (key: string, col: ColumnMeta) => void;
 }
 
-export default function DataTable({ dataset, highlightCells, maxRows }: DataTableProps) {
+export default function DataTable({ dataset, highlightCells, maxRows, columnMenuItems, onColumnMenuClick }: DataTableProps) {
   const rows = maxRows ? dataset.rows.slice(0, maxRows) : dataset.rows;
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const appearanceMode = useSettingsStore((s) => s.appearanceMode);
@@ -28,12 +32,21 @@ export default function DataTable({ dataset, highlightCells, maxRows }: DataTabl
 
   const columns: ColumnsType<Record<string, unknown>> = dataset.columns.map((col) => ({
     title: (
-      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: isKimi ? t.fontSans : undefined }}>
-        {col.name}
-        <span style={{ fontSize: 10, opacity: 0.5, fontFamily: isKimi ? t.fontSans : undefined }}>
-          {col.type === 'numeric' ? '#' : 'Aa'}
+      <Dropdown
+        menu={{
+          items: columnMenuItems?.(col) ?? [],
+          onClick: ({ key }) => onColumnMenuClick?.(key, col),
+        }}
+        trigger={['contextMenu']}
+        disabled={!columnMenuItems}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: isKimi ? t.fontSans : undefined, cursor: columnMenuItems ? 'context-menu' : undefined }}>
+          {col.name}
+          <span style={{ fontSize: 10, opacity: 0.5, fontFamily: isKimi ? t.fontSans : undefined }}>
+            {col.type === 'numeric' ? '#' : 'Aa'}
+          </span>
         </span>
-      </span>
+      </Dropdown>
     ),
     dataIndex: col.name,
     key: col.name,

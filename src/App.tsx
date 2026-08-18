@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
@@ -11,6 +12,8 @@ import HistoryPage from '@/pages/HistoryPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { useTheme, useAntTheme } from '@/themes/useTheme';
 import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useHistoryStore } from '@/stores/useHistoryStore';
+import { cleanupHistory } from '@/db/operations';
 
 const router = createHashRouter([{
   path: '/',
@@ -30,6 +33,18 @@ function ThemeApp() {
   useTheme();
   const antTheme = useAntTheme();
   const appearanceMode = useSettingsStore((s) => s.appearanceMode);
+  const autoCleanHistory = useSettingsStore((s) => s.autoCleanHistory);
+  const historyRetentionDays = useSettingsStore((s) => s.historyRetentionDays);
+  const refreshHistory = useHistoryStore((s) => s.refresh);
+
+  // 启动时按保留天数自动清理过期历史记录（设置页可关闭）
+  useEffect(() => {
+    if (!autoCleanHistory) return;
+    void (async () => {
+      const removed = await cleanupHistory(historyRetentionDays);
+      if (removed > 0) await refreshHistory();
+    })();
+  }, [autoCleanHistory, historyRetentionDays, refreshHistory]);
 
   return (
     <ConfigProvider

@@ -76,14 +76,15 @@ export function runNormality(rows: Record<string, unknown>[], cols: string[], al
   table: ResultTable;
   qqData: Record<string, { theoretical: number[]; sample: number[] }>;
 } {
-  const headers = ['变量', 'N', 'Shapiro-Wilk W', 'p 值', `是否正态(p>${alpha})`];
+  const headers = ['变量', 'N', 'Shapiro-Wilk W', 'p 值', `是否正态(p>${alpha})`, 'K-S D', 'K-S p 值'];
   const resultRows: (string | number)[][] = [];
   const qqData: Record<string, { theoretical: number[]; sample: number[] }> = {};
   for (const col of cols) {
     const values = extractNumericColumn(rows, col);
     if (values.length < 3) continue;
     const { w, p } = shapiroWilk(values);
-    resultRows.push([col, values.length, w, p, p > alpha ? '是' : '否']);
+    const { d, p: ksP } = kolmogorovSmirnov(values);
+    resultRows.push([col, values.length, w, p, p > alpha ? '是' : '否', d, ksP]);
     const sorted = [...values].sort((a, b) => a - b);
     const n = sorted.length;
     qqData[col] = {
@@ -92,6 +93,31 @@ export function runNormality(rows: Record<string, unknown>[], cols: string[], al
     };
   }
   return { table: { title: '正态性检验', headers, rows: resultRows }, qqData };
+}
+
+/**
+ * One-sample Kolmogorov-Smirnov test against the normal distribution.
+ * Since mean/variance are estimated from the data, the Lilliefors-type
+ * correction is applied to the test statistic before computing the p-value.
+ */
+function kolmogorovSmirnov(values: number[]): { d: number; p: number } {
+  const n = values.length;
+  const sorted = [...values].sort((a, b) => a - b);
+  const m = mean(sorted);
+  const s = std(sorted);
+  if (n < 3 || s <= 0 || !isFinite(s)) return { d: 1, p: 0 };
+  let d = 0;
+  for (let i = 0; i < n; i++) {
+    const z = (sorted[i] - m) / s;
+    const cdf = normalCDF(z);
+    const empirical = (i + 1) / n;
+    d = Math.max(d, Math.abs(cdf - empirical), Math.abs(cdf - (i) / n));
+  }
+  // Lilliefors correction: z = (√n + 0.12 + 0.11/√n) · D
+  const z = (Math.sqrt(n) + 0.12 + 0.11 / Math.sqrt(n)) * d;
+  // Kolmogorov distribution asymptotic p-value (two-sided)
+  const p = 2 * Math.exp(-2 * z * z);
+  return { d: +d.toFixed(4), p: Math.min(1, Math.max(0, p)) };
 }
 
 export function runGroupedStats(rows: Record<string, unknown>[], valueCols: string[], groupCol: string): ResultTable {

@@ -30,6 +30,16 @@ export async function getHistory(id: string): Promise<HistoryRecord | undefined>
 export async function getAllHistory(): Promise<HistoryRecord[]> { return db.history.orderBy('createdAt').reverse().toArray(); }
 export async function deleteHistory(id: string): Promise<void> { await db.history.delete(id); }
 
+/** 按保留天数清理过期历史记录，返回删除条数 */
+export async function cleanupHistory(retentionDays: number): Promise<number> {
+  if (!retentionDays || retentionDays <= 0) return 0;
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const all = await db.history.toArray();
+  const expired = all.filter((r) => r.createdAt < cutoff);
+  if (expired.length) await db.history.bulkDelete(expired.map((r) => r.id));
+  return expired.length;
+}
+
 export async function getStorageStats(): Promise<{ datasetCount: number; chartCount: number; historyCount: number }> {
   const [datasetCount, chartCount, historyCount] = await Promise.all([db.datasets.count(), db.charts.count(), db.history.count()]);
   return { datasetCount, chartCount, historyCount };

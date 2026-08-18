@@ -278,35 +278,39 @@ export async function loadFullFile(
       let headers: string[] = [];
       let headerRowConsumed = false;
 
-      Papa.parse<Record<string, unknown>>(text, {
+      Papa.parse<unknown[]>(text, {
         header: false,
         delimiter: delim,
         skipEmptyLines: true,
         dynamicTyping: false,
-        chunk: (results: { data: unknown[] }, parser: { abort: () => void }) => {
-          const data = results.data as Record<string, unknown>[];
+        chunk: (results: { data: unknown[]; meta: { cursor: number } }, parser: { abort: () => void }) => {
+          const data = results.data as unknown[][];
           if (!headerRowConsumed) {
-            // First chunk: extract headers if needed
+            const firstRow = data[0] ?? [];
             if (options.hasHeader) {
-              headers = data[0] ? Object.keys(data[0]).filter((k) => k.trim() !== '') : [];
-              // Re-parse with header: this is tricky... let's just handle it inline
-              if (headers.length === 0 && data[0]) {
-                // PapaParse with header:false gives arrays, need to extract
-                const firstRow = data[0];
-                headers = Object.keys(firstRow);
-              }
-              allRows.push(...data.slice(1));
+              // Real header names come from the first row values, NOT array indices
+              headers = firstRow.map((v) => String(v ?? '').trim());
             } else {
-              headers = Array.from({ length: Object.keys(data[0] ?? {}).length }, (_, i) => `列${i + 1}`);
-              allRows.push(...data);
+              headers = firstRow.map((_v, i) => `列${i + 1}`);
+            }
+            // Remaining rows in the first chunk are data; their arrays must be mapped to objects
+            const headerLen = headers.length;
+            for (const row of data.slice(options.hasHeader ? 1 : 0)) {
+              const obj: Record<string, unknown> = {};
+              for (let i = 0; i < headerLen; i++) obj[headers[i]] = row[i];
+              allRows.push(obj);
             }
             headerRowConsumed = true;
           } else {
-            allRows.push(...data);
+            for (const row of data) {
+              const obj: Record<string, unknown> = {};
+              for (let i = 0; i < headers.length; i++) obj[headers[i]] = row[i];
+              allRows.push(obj);
+            }
           }
 
-          const progress = Math.min(text.length, (allRows.length / 1000) * 5000 * 100);
-          onProgress?.({ phase: 'parsing', loaded: progress, total: text.length });
+          const loaded = Math.min(text.length, results.meta.cursor || text.length);
+          onProgress?.({ phase: 'parsing', loaded, total: text.length });
 
           // Prevent memory overload: pause if too many rows accumulated
           if (allRows.length > 200000) {
@@ -316,19 +320,11 @@ export async function loadFullFile(
         },
         complete: () => {
           const skippedRows = allRows.slice(options.skipRows);
-          // Re-parse with proper headers if needed
-          if (options.hasHeader && headers.length === 0) {
-            // Fallback: try to get headers from the first row
-            const headerRow = allRows[0];
-            if (headerRow) {
-              headers = Object.keys(headerRow).filter((k) => k.trim() !== '');
-            }
-          }
           if (!options.hasHeader && headers.length === 0) {
             headers = Array.from({ length: Object.keys(skippedRows[0] ?? {}).length }, (_, i) => `列${i + 1}`);
           }
           onProgress?.({ phase: 'saving', loaded: skippedRows.length, total: skippedRows.length });
-          resolve({ headers, rows: skippedRows, columns: inferAllColumnTypes(headers, skippedRows) });
+          resolve({ headers, rows: skippedRows, columns: inferAllColumnTypes(headers, skippedRows), experimentGroupCol: detectExperimentGroup(headers, skippedRows) });
         },
         error: (err: { message: string }) => {
           reject(new Error(`文件解析失败: ${err.message}`));

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { message } from 'antd';
-import { Sparkles, Eye, Play, RotateCcw, Settings2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Eye, Play, RotateCcw, Settings2, AlertTriangle, CheckCircle2, Trash2, Filter } from 'lucide-react';
 import PageHeader from '@/components/layout/PageHeader';
 import { useDataStore } from '@/stores/useDataStore';
 import { useDataOperations } from '@/hooks/useDataOperations';
@@ -17,12 +17,20 @@ export default function CleaningPage() {
   const [pendingDataset, setPendingDataset] = useState<Dataset | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const [missingMethod, setMissingMethod] = useState<'delete' | 'fill'>('fill');
+  const [missingMethod, setMissingMethod] = useState<'delete' | 'fill' | 'mark'>('fill');
   const [fillStrategy, setFillStrategy] = useState<'mean' | 'median' | 'custom'>('median');
   const [fillValue, setFillValue] = useState(0);
   const [targetCols, setTargetCols] = useState<string[]>(['__all_numeric__']);
+  const [outlierK, setOutlierK] = useState(1.5);
+  const [outlierMethod, setOutlierMethod] = useState<'remove' | 'winsorize' | 'keep'>('keep');
   const [outlierHighlights, setOutlierHighlights] = useState<{ row: number; col: string; color: string }[]>([]);
   const [outlierCount, setOutlierCount] = useState(0);
+  const [missingHighlights, setMissingHighlights] = useState<{ row: number; col: string; color: string }[]>([]);
+  const [missingCount, setMissingCount] = useState(0);
+  const [pendingDeleteCols, setPendingDeleteCols] = useState<string[]>([]);
+  const [filterCol, setFilterCol] = useState('');
+  const [filterOp, setFilterOp] = useState('gt');
+  const [filterValue, setFilterValue] = useState('');
 
   const dataset = pendingDataset ?? currentDataset;
 
@@ -68,6 +76,21 @@ export default function CleaningPage() {
 
     if (missingMethod === 'delete') {
       ds.rows = ds.rows.filter((row) => cols.every((col) => row[col] !== null && row[col] !== undefined && row[col] !== ''));
+    } else if (missingMethod === 'mark') {
+      // 仅标记（数据不变）：用高亮记录缺失位置
+      const marks: { row: number; col: string; color: string }[] = [];
+      ds.rows.forEach((row, idx) => {
+        for (const col of cols) {
+          if (row[col] === null || row[col] === undefined || row[col] === '') marks.push({ row: idx, col, color: '#f97316' });
+        }
+      });
+      setMissingHighlights(marks);
+      setMissingCount(marks.length);
+      ds.rowCount = ds.rows.length;
+      setPendingDataset(ds);
+      setHasChanges(false);
+      message.success(`已标记 ${marks.length} 个缺失单元格（数据未修改）`);
+      return;
     } else {
       for (const col of cols) {
         const values = ds.rows.map((r) => Number(r[col])).filter((v) => !isNaN(v));
@@ -97,6 +120,8 @@ export default function CleaningPage() {
     const numericCols = src.columns.filter((c) => c.type === 'numeric').map((c) => c.name);
     const highlights: { row: number; col: string; color: string }[] = [];
     const ds = JSON.parse(JSON.stringify(src)) as Dataset;
+    // bounds per column: { lower, upper }
+    const bounds = new Map<string, { lower: number; upper: number }>();
     for (const col of numericCols) {
       const values = ds.rows.map((r) => Number(r[col])).filter((v) => !isNaN(v));
       if (values.length < 4) continue;
@@ -104,21 +129,41 @@ export default function CleaningPage() {
       const q1 = sorted[Math.floor(sorted.length * 0.25)];
       const q3 = sorted[Math.floor(sorted.length * 0.75)];
       const iqr = q3 - q1;
-      const lower = q1 - 1.5 * iqr;
-      const upper = q3 + 1.5 * iqr;
-      ds.rows.forEach((row, idx) => {
-        const v = Number(row[col]);
-        if (!isNaN(v) && (v < lower || v > upper)) highlights.push({ row: idx, col, color: '#f97316' });
-      });
+      bounds.set(col, { lower: q1 - outlierK * iqr, upper: q3 + outlierK * iqr });
     }
-    for (const h of highlights) ds.rows[h.row][h.col] = null;
+    const isOutlier = (col: string, v: number): boolean => {
+      const b = bounds.get(col);
+      return !!b && (v < b.lower || v > b.upper);
+    };
+    ds.rows.forEach((row, idx) => {
+      for (const col of numericCols) {
+        const v = Number(row[col]);
+        if (!isNaN(v) && isOutlier(col, v)) highlights.push({ row: idx, col, color: '#f97316' });
+      }
+    });
+    if (outlierMethod === 'remove') {
+      ds.rows = ds.rows.filter((row) => !numericCols.some((col) => { const v = Number(row[col]); return !isNaN(v) && isOutlier(col, v); }));
+    } else if (outlierMethod === 'winsorize') {
+      for (const col of numericCols) {
+        const b = bounds.get(col);
+        if (!b) continue;
+        ds.rows.forEach((row) => {
+          const v = Number(row[col]);
+          if (!isNaN(v) && isOutlier(col, v)) row[col] = v < b.lower ? b.lower : b.upper;
+        });
+      }
+    }
+    // 'keep'：仅标记（数据不变）
     ds.rowCount = ds.rows.length;
     setPendingDataset(ds);
     setOutlierHighlights(highlights);
     setOutlierCount(highlights.length);
-    setHasChanges(true);
-    message.info(`检测到 ${highlights.length} 个异常值 (IQR 方法)，已标记为缺失`);
-  }, [pendingDataset, currentDataset]);
+    setHasChanges(outlierMethod !== 'keep');
+    const actionText = outlierMethod === 'remove' ? `已剔除 ${src.rowCount - ds.rows.length} 行含异常值记录`
+      : outlierMethod === 'winsorize' ? '异常值已替换为边界值 (Winsorize)'
+      : '异常值已标记（数据未修改）';
+    message.success(`检测到 ${highlights.length} 个异常值 (IQR, k=${outlierK})，${actionText}`);
+  }, [pendingDataset, currentDataset, outlierK, outlierMethod]);
 
   const renameColumn = useCallback((oldName: string, newName: string) => {
     const src = pendingDataset ?? currentDataset;
@@ -136,6 +181,58 @@ export default function CleaningPage() {
     });
     setPendingDataset(ds);
     setHasChanges(true);
+  }, [pendingDataset, currentDataset]);
+
+  const deleteColumns = useCallback((cols: string[]) => {
+    const src = pendingDataset ?? currentDataset;
+    if (!src || cols.length === 0) return;
+    const ds = JSON.parse(JSON.stringify(src)) as Dataset;
+    ds.columns = ds.columns.filter((c) => !cols.includes(c.name));
+    ds.rows = ds.rows.map((row) => {
+      const newRow = { ...row };
+      cols.forEach((col) => delete newRow[col]);
+      return newRow;
+    });
+    ds.colCount = ds.columns.length;
+    ds.rowCount = ds.rows.length;
+    setPendingDataset(ds);
+    setHasChanges(true);
+    message.success(`已删除 ${cols.length} 列`);
+  }, [pendingDataset, currentDataset]);
+
+  const toggleColumnType = useCallback((colName: string) => {
+    const src = pendingDataset ?? currentDataset;
+    if (!src) return;
+    const ds = JSON.parse(JSON.stringify(src)) as Dataset;
+    const col = ds.columns.find((c) => c.name === colName);
+    if (!col) return;
+    col.type = col.type === 'numeric' ? 'categorical' : 'numeric';
+    setPendingDataset(ds);
+    setHasChanges(true);
+    message.success(`列 "${colName}" 已转换为${col.type === 'numeric' ? '数值' : '分类'}`);
+  }, [pendingDataset, currentDataset]);
+
+  const filterRows = useCallback((col: string, op: string, threshold: string) => {
+    const src = pendingDataset ?? currentDataset;
+    if (!src || !col || !op) return;
+    const ds = JSON.parse(JSON.stringify(src)) as Dataset;
+    const numThreshold = Number(threshold);
+    const test = (v: unknown): boolean => {
+      const s = String(v ?? '');
+      if (op === 'contains') return s.includes(threshold);
+      if (isNaN(numThreshold) || s === '') return false;
+      const n = Number(v);
+      if (op === 'gt') return n > numThreshold;
+      if (op === 'lt') return n < numThreshold;
+      if (op === 'eq') return n === numThreshold;
+      return false;
+    };
+    const before = ds.rows.length;
+    ds.rows = ds.rows.filter((row) => test(row[col]));
+    ds.rowCount = ds.rows.length;
+    setPendingDataset(ds);
+    setHasChanges(true);
+    message.success(`筛选完成：${before} → ${ds.rows.length} 行`);
   }, [pendingDataset, currentDataset]);
 
   if (!currentDataset) {
@@ -273,10 +370,18 @@ export default function CleaningPage() {
                     )}
                   </div>
                 </label>
+                <label className="flex items-start gap-3 p-3 rounded-xl transition hover:bg-white/[0.02] cursor-pointer">
+                  <input type="radio" checked={missingMethod === 'mark'} onChange={() => setMissingMethod('mark')} className="mt-1 accent-indigo-500" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-300">仅标记缺失单元格</p>
+                    <p className="text-xs text-slate-500">在数据预览中橙色高亮缺失位置，不修改数据</p>
+                  </div>
+                </label>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-500">含缺失值的行: <span className="text-amber-400">{missingRowCount}</span></span>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
+                  <span className="text-xs text-slate-500">{missingCount > 0 ? <>已标记 <span className="text-amber-400">{missingCount}</span> 个缺失单元格</> : '尚未标记'}</span>
                   <button className="btn-secondary" onClick={resetChanges}><RotateCcw className="h-3.5 w-3.5" /> 重置</button>
                   <button className="btn-primary" onClick={handleMissingValues}><Settings2 className="h-3.5 w-3.5" /> 应用选择</button>
                 </div>
@@ -287,25 +392,129 @@ export default function CleaningPage() {
           {tab === 'outlier' && (
             <div className="animate-fade-in">
               <h3 className="text-sm font-semibold text-white mb-4">异常值检测 (IQR 方法)</h3>
-              <p className="text-xs text-slate-500 mb-4">使用四分位距法 (Q1 ± 1.5×IQR) 检测异常值。检测到的异常值将被标记为缺失，可在数据预览中查看高亮。</p>
+              <p className="text-xs text-slate-500 mb-4">使用四分位距法 (Q1 - k×IQR, Q3 + k×IQR) 检测异常值，k 默认 1.5。</p>
+
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1.5 block">阈值系数 k（越小越敏感）</label>
+                  <input type="number" className="input-field" min={0.5} max={5} step={0.5} value={outlierK}
+                    onChange={(e) => setOutlierK(Number(e.target.value) || 1.5)} />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1.5 block">处理方式</label>
+                  <div className="flex flex-col gap-2">
+                    {([
+                      ['keep', '仅标记', '在表格中橙色高亮，不修改数据'],
+                      ['winsorize', '替换为边界值', '异常值替换为 Q1-k×IQR / Q3+k×IQR 边界值 (Winsorize)'],
+                      ['remove', '剔除', '删除包含异常值的整行记录'],
+                    ] as const).map(([key, label, desc]) => (
+                      <label key={key} className="flex items-start gap-3 p-3 rounded-xl transition hover:bg-white/[0.02] cursor-pointer">
+                        <input type="radio" checked={outlierMethod === key} onChange={() => setOutlierMethod(key)} className="mt-1 accent-indigo-500" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-300">{label}</p>
+                          <p className="text-xs text-slate-500">{desc}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">{outlierCount > 0 ? <>已检测到 <span className="text-amber-400">{outlierCount}</span> 个异常值并标记为缺失</> : '尚未检测'}</span>
-                <button className="btn-primary" onClick={handleOutliers}><AlertTriangle className="h-3.5 w-3.5" /> 检测并标记异常值</button>
+                <span className="text-xs text-slate-500">{outlierCount > 0 ? <>已检测到 <span className="text-amber-400">{outlierCount}</span> 个异常值</> : '尚未检测'}</span>
+                <button className="btn-primary" onClick={handleOutliers}><AlertTriangle className="h-3.5 w-3.5" /> 检测并处理异常值</button>
               </div>
             </div>
           )}
 
           {tab === 'columns' && (
-            <div className="animate-fade-in">
-              <h3 className="text-sm font-semibold text-white mb-4">重命名列</h3>
-              <p className="text-xs text-slate-500 mb-4">在输入框中修改列名，失焦后应用到预览数据。仅显示前 6 列。</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {ds.columns.slice(0, 6).map((col) => (
-                  <label key={col.name} className="block">
-                    <span className="text-xs text-slate-500 block mb-1">{col.name}</span>
-                    <input className="input-field" defaultValue={col.name} onBlur={(e) => renameColumn(col.name, e.target.value)} />
+            <div className="animate-fade-in space-y-6">
+              {/* 重命名列 */}
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-2">重命名列</h3>
+                <p className="text-xs text-slate-500 mb-3">在输入框中修改列名，失焦后应用到预览数据。仅显示前 6 列。</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {ds.columns.slice(0, 6).map((col) => (
+                    <label key={col.name} className="block">
+                      <span className="text-xs text-slate-500 block mb-1">{col.name}</span>
+                      <input className="input-field" defaultValue={col.name} onBlur={(e) => renameColumn(col.name, e.target.value)} />
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 删除列 */}
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-2">删除列</h3>
+                <p className="text-xs text-slate-500 mb-3">勾选要删除的列（最多显示 12 列），点击删除按钮确认。</p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {ds.columns.slice(0, 12).map((col) => (
+                    <label key={col.name} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all border ${
+                      pendingDeleteCols.includes(col.name)
+                        ? 'bg-red-500/15 text-red-300 border-red-500/25'
+                        : 'bg-white/[0.03] text-slate-400 border-white/5 hover:bg-white/[0.06]'
+                    }`}>
+                      <input type="checkbox" checked={pendingDeleteCols.includes(col.name)}
+                        onChange={() => setPendingDeleteCols((prev) => prev.includes(col.name) ? prev.filter((x) => x !== col.name) : [...prev, col.name])}
+                        className="accent-red-500" />
+                      {col.name}
+                    </label>
+                  ))}
+                </div>
+                <button className="btn-secondary text-xs !text-red-400 hover:!border-red-400/30"
+                  disabled={pendingDeleteCols.length === 0}
+                  onClick={() => { deleteColumns(pendingDeleteCols); setPendingDeleteCols([]); }}>
+                  <Trash2 className="h-3.5 w-3.5" /> 删除所选列 ({pendingDeleteCols.length})
+                </button>
+              </div>
+
+              {/* 类型转换 */}
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-2">类型转换</h3>
+                <p className="text-xs text-slate-500 mb-3">在 数值 ↔ 分类 之间切换列类型（仅影响预览与分析时的处理方式）。</p>
+                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {ds.columns.map((col) => (
+                    <div key={col.name} className="flex items-center justify-between p-2 rounded-lg transition hover:bg-white/[0.02]">
+                      <span className="text-sm text-slate-300 truncate">{col.name}</span>
+                      <button
+                        onClick={() => toggleColumnType(col.name)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          col.type === 'numeric'
+                            ? 'bg-blue-500/15 text-blue-300 border border-blue-500/25'
+                            : 'bg-purple-500/15 text-purple-300 border border-purple-500/25'
+                        }`}
+                      >{col.type === 'numeric' ? '🔢 数值 → 分类' : '🔤 分类 → 数值'}</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 数据筛选 */}
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-2">数据筛选</h3>
+                <p className="text-xs text-slate-500 mb-3">按列条件过滤行（应用到数据集，可用"重置"恢复）。</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="block">
+                    <span className="text-xs text-slate-500 block mb-1">列</span>
+                    <select className="input-field" value={filterCol} onChange={(e) => setFilterCol(e.target.value)}>
+                      <option value="">选择列...</option>
+                      {ds.columns.map((col) => <option key={col.name} value={col.name}>{col.name}</option>)}
+                    </select>
                   </label>
-                ))}
+                  <label className="block">
+                    <span className="text-xs text-slate-500 block mb-1">条件</span>
+                    <select className="input-field" value={filterOp} onChange={(e) => setFilterOp(e.target.value)}>
+                      <option value="gt">大于</option>
+                      <option value="lt">小于</option>
+                      <option value="eq">等于</option>
+                      <option value="contains">包含</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-slate-500 block mb-1">阈值</span>
+                    <input className="input-field" value={filterValue} onChange={(e) => setFilterValue(e.target.value)} placeholder="例如 10" />
+                  </label>
+                  <button className="btn-primary text-xs" onClick={() => filterRows(filterCol, filterOp, filterValue)}><Filter className="h-3.5 w-3.5" /> 应用筛选</button>
+                </div>
               </div>
             </div>
           )}
@@ -318,7 +527,7 @@ export default function CleaningPage() {
           <Sparkles className="h-4 w-4 text-indigo-400" />
           数据预览
         </h3>
-        <DataTable dataset={ds} maxRows={10} highlightCells={outlierHighlights.length > 0 ? outlierHighlights : undefined} />
+        <DataTable dataset={ds} maxRows={10} highlightCells={(missingHighlights.length > 0 ? missingHighlights : []).concat(outlierHighlights.length > 0 ? outlierHighlights : [])} />
         {hasChanges && (
           <div className="mt-4 flex justify-end gap-3">
             <button className="btn-secondary" onClick={resetChanges}><RotateCcw className="h-3.5 w-3.5" /> 重置</button>

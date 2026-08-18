@@ -19,6 +19,18 @@ describe('runCorrelation', () => {
     const r = runCorrelation(rows, ['x', 'y'], 'spearman');
     expect(r.matrix[0][1]).toBeCloseTo(1, 3);
   });
+  it('appends significance stars to table cells', () => {
+    // x and y are perfectly correlated (n=5) → p≈0 → three stars
+    const r = runCorrelation(rows, ['x', 'y'], 'pearson');
+    expect(String(r.table.rows[0][2])).toMatch(/^1\*{3}$/);
+    // diagonal keeps the raw number (no stars)
+    expect(r.table.rows[0][1]).toBe(1);
+    expect(r.table.rows[0][0]).toBe('x');
+  });
+  it('keeps matrix values numeric (no stars)', () => {
+    const r = runCorrelation(rows, ['x', 'y'], 'pearson');
+    expect(typeof r.matrix[0][1]).toBe('number');
+  });
 });
 
 describe('runLinearRegression', () => {

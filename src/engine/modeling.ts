@@ -65,18 +65,42 @@ export function runCorrelation(rows: Record<string, unknown>[], cols: string[], 
 } {
   const n = cols.length;
   const matrix: number[][] = Array.from({ length: n }, () => Array(n).fill(1));
+  const pValues: number[][] = Array.from({ length: n }, () => Array(n).fill(NaN));
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const x = extractNumericColumn(rows, cols[i]), y = extractNumericColumn(rows, cols[j]);
       const minLen = Math.min(x.length, y.length);
-      const r = method === 'spearman' ? spearmanR(x.slice(0, minLen), y.slice(0, minLen))
-        : method === 'kendall' ? kendallTau(x.slice(0, minLen), y.slice(0, minLen))
-        : pearsonR(x.slice(0, minLen), y.slice(0, minLen));
+      const xv = x.slice(0, minLen), yv = y.slice(0, minLen);
+      const r = method === 'spearman' ? spearmanR(xv, yv)
+        : method === 'kendall' ? kendallTau(xv, yv)
+        : pearsonR(xv, yv);
       matrix[i][j] = r; matrix[j][i] = r;
+      pValues[i][j] = pValues[j][i] = correlationPValue(r, minLen, method);
     }
   }
   const headers = ['', ...cols];
-  return { table: { title: `${method} 相关矩阵`, headers, rows: cols.map((col, i) => [col, ...matrix[i].map((v) => Number(v.toFixed(3)))]) }, matrix };
+  const stars = (p: number) => (isNaN(p) ? '' : p < 0.001 ? '***' : p < 0.01 ? '**' : p < 0.05 ? '*' : '');
+  return { table: { title: `${method} 相关矩阵`, headers, rows: cols.map((col, i) => [col, ...matrix[i].map((v, j) => i === j ? Number(v.toFixed(3)) : `${Number(v.toFixed(3))}${stars(pValues[i][j])}`)]) }, matrix };
+}
+
+/** Approximate two-tailed p-value for a correlation coefficient */
+function correlationPValue(r: number, n: number, method: string): number {
+  if (n < 3 || !isFinite(r)) return NaN;
+  if (Math.abs(r) >= 1) return 0; // perfect correlation → p ≈ 0 (t = ∞)
+  if (method === 'kendall') {
+    const z = 3 * r * Math.sqrt((n * (n - 1)) / (2 * (2 * n + 5)));
+    return 2 * (1 - normalCDFApprox(Math.abs(z)));
+  }
+  const t = r * Math.sqrt((n - 2) / (1 - r * r));
+  return tTestPValue(Math.abs(t), n - 2);
+}
+
+function normalCDFApprox(z: number): number {
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.sqrt(2);
+  const t = 1 / (1 + p * x);
+  return 0.5 * (1 + sign * (1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x)));
 }
 
 // --- OLS Linear Regression ---
