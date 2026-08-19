@@ -1,24 +1,23 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Button, Select, Table, Typography, Alert, Space, message, Spin, Descriptions, Divider, Checkbox, Tabs, Tooltip, Radio } from 'antd';
+import { Button, Select, Table, Typography, Alert, Space, message, Spin, Checkbox, Tooltip, Radio, Empty } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
 import { useLocation } from 'react-router-dom';
-import { PlayCircleOutlined, SaveOutlined, DownloadOutlined, CopyOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, SaveOutlined, DownloadOutlined, CopyOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import { useDataStore } from '@/stores/useDataStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useChartStore } from '@/stores/useChartStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
-import { generateId, formatNumber, formatPValue } from '@/utils/format';
-import { exportCSV, exportPNG } from '@/utils/export';
-import { runDescriptive, runFrequency, runNormality, runGroupedStats } from '@/engine/descriptive';
-import { runIndependentTTest, runPairedTTest, runOneWayANOVA, runTukeyHSD } from '@/engine/hypothesis';
-import { runCorrelation, runLinearRegression, runNonlinearFit, runRSM, runPCA, type RSMResult } from '@/engine/modeling';
-import { buildRsmCharts, buildRsmDiagnostics } from '@/engine/rsmCharts';
-import { runMissingDiagnostic, runOutlierDetection, runStandardization } from '@/engine/preprocessing';
-import { extractByGroup, variance, fTestPValue } from '@/engine/utils';
-import type { AnalysisType, AnalysisConfig, ResultTable, ChartDataSource } from '@/types/analysis';
+import { generateId, formatNumber } from '@/utils/format';
+import { exportPNG } from '@/utils/export';
+import { computeAnalysis, type AnalysisResultData } from '@/engine/runAnalysis';
+import {
+  OUTPUT_MODULES, defaultCheckedOutputs, applyOutputFilter, moduleToCsv,
+  type RenderedModule,
+} from '@/engine/outputModules';
+import type { AnalysisType, AnalysisConfig, ChartDataSource } from '@/types/analysis';
 import type { ChartConfig, ChartType } from '@/types/chart';
 
 const { Text } = Typography;
@@ -46,518 +45,297 @@ const ANALYSES: AnalysisDef[] = [
   { key: 'pipeline', label: '全流程分析', group: '综合', needs: { valueCols: 'multi', groupCol: true, factorCols: '2-3', responseCol: true, pipeline: true } },
 ];
 
-/** 计算分组箱线图数据（whisker = 1.5×IQR，与图表页一致） */
-function boxplotSeries(rows: Record<string, unknown>[], valueCol: string, groupCol: string): { groups: string[]; box: number[][] } {
-  const m = new Map<string, number[]>();
-  for (const row of rows) {
-    const g = String(row[groupCol] ?? '');
-    const v = Number(row[valueCol]);
-    if (isNaN(v)) continue;
-    if (!m.has(g)) m.set(g, []);
-    m.get(g)!.push(v);
-  }
-  const groups: string[] = [];
-  const box: number[][] = [];
-  for (const [g, vals] of m.entries()) {
-    groups.push(g);
-    if (vals.length < 4) { box.push([0, 0, 0, 0, 0]); continue; }
-    const s = [...vals].sort((a, b) => a - b);
-    const q1 = s[Math.floor(s.length * 0.25)];
-    const q2 = s[Math.floor(s.length * 0.5)];
-    const q3 = s[Math.floor(s.length * 0.75)];
-    const iqr = q3 - q1;
-    const lower = Math.max(s[0], q1 - 1.5 * iqr);
-    const upper = Math.min(s[s.length - 1], q3 + 1.5 * iqr);
-    box.push([+lower.toFixed(4), +q1.toFixed(4), +q2.toFixed(4), +q3.toFixed(4), +upper.toFixed(4)]);
-  }
-  return { groups, box };
+interface AnalysisSession {
+  id: string;
+  datasetId: string;
+  analysisType: AnalysisType;
+  valueCols: string[];
+  groupCol?: string;
+  xCols: string[];
+  yCol?: string;
+  factorCols: string[];
+  responseCol?: string;
+  pairedCol1?: string;
+  pairedCol2?: string;
+  corrMethod: string;
+  modelName: string;
+  pipelineModels: string[];
+  running: boolean;
+  results: AnalysisResultData | null;
+  checkedOutputs: string[];
+  rsmEqForm: 'coded' | 'actual';
+}
+
+function newSession(id: string, datasetId: string, type: AnalysisType): AnalysisSession {
+  return {
+    id, datasetId, analysisType: type,
+    valueCols: [], xCols: [], factorCols: [],
+    pipelineModels: ['correlation', 'rsm', 'pca'],
+    corrMethod: 'pearson', modelName: 'exp',
+    running: false, results: null,
+    checkedOutputs: defaultCheckedOutputs(type),
+    rsmEqForm: 'coded',
+  };
 }
 
 export default function AnalysisPage() {
-  const { currentDataset, getNumericColumns, getCategoricalColumns } = useDataStore();
+  const { currentDataset, datasetList } = useDataStore();
   const { addRecord } = useHistoryStore();
   const { addChart } = useChartStore();
   const alpha = useSettingsStore((s) => s.alpha);
   const digits = useSettingsStore((s) => s.significantDigits);
 
-  const [analysisType, setAnalysisType] = useState<AnalysisType | null>(null);
-  const [valueCols, setValueCols] = useState<string[]>([]);
-  const [groupCol, setGroupCol] = useState<string | undefined>();
-  const [xCols, setXCols] = useState<string[]>([]);
-  const [yCol, setYCol] = useState<string | undefined>();
-  const [factorCols, setFactorCols] = useState<string[]>([]);
-  const [responseCol, setResponseCol] = useState<string | undefined>();
-  const [pairedCol1, setPairedCol1] = useState<string | undefined>();
-  const [pairedCol2, setPairedCol2] = useState<string | undefined>();
-  const [corrMethod, setCorrMethod] = useState('pearson');
-  const [modelName, setModelName] = useState('exp');
-  const [pipelineModels, setPipelineModels] = useState<string[]>(['correlation', 'rsm', 'pca']);
-  const [running, setRunning] = useState(false);
-  const [results, setResults] = useState<{ tables: ResultTable[]; conclusion: string; chartData?: ChartDataSource[]; rsm?: RSMResult } | null>(null);
-  const rsmChartRefs = useRef<Record<string, ReactECharts | null>>({});
-  const [rsmEqForm, setRsmEqForm] = useState<'coded' | 'actual'>('coded');
+  const [sessions, setSessions] = useState<AnalysisSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const chartRefs = useRef<Record<string, ReactECharts | null>>({});
 
-  const activeAnalysis = ANALYSES.find((a) => a.key === analysisType);
-  const numericCols = getNumericColumns().map((c) => c.name);
-  const catCols = getCategoricalColumns().map((c) => c.name);
+  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
+  const activeDef = activeSession ? ANALYSES.find((a) => a.key === activeSession.analysisType) : null;
 
-  const run = useCallback(async () => {
-    if (!currentDataset || !analysisType) return;
-    setRunning(true);
-    setResults(null); // clear stale results before computing new ones
-    const rows = currentDataset.rows;
+  const sessionDataset = useCallback((s: AnalysisSession) =>
+    datasetList.find((d) => d.id === s.datasetId) ?? currentDataset, [datasetList, currentDataset]);
+
+  const sessionCols = useCallback((s: AnalysisSession) => {
+    const ds = sessionDataset(s);
+    if (!ds?.columns) return { numericCols: [] as string[], catCols: [] as string[] };
+    return {
+      numericCols: ds.columns.filter((c) => c.type === 'numeric' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => c.name),
+      catCols: ds.columns.filter((c) => c.type === 'categorical' && c.role !== 'metadata' && c.role !== 'unknown').map((c) => c.name),
+    };
+  }, [sessionDataset]);
+
+  const createSession = useCallback((type: AnalysisType | null, datasetId?: string): string => {
+    const id = generateId();
+    const dsId = datasetId ?? currentDataset?.id ?? datasetList[0]?.id ?? '';
+    const sess = newSession(id, dsId, type ?? 'descriptive');
+    setSessions((prev) => [...prev, sess]);
+    setActiveSessionId(id);
+    return id;
+  }, [currentDataset, datasetList]);
+
+  const updateSession = useCallback((id: string, patch: Partial<AnalysisSession>) => {
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }, []);
+
+  const removeSession = useCallback((id: string) => {
+    setSessions((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      setActiveSessionId((cur) => (cur === id ? (next.length ? next[next.length - 1].id : null) : cur));
+      return next;
+    });
+  }, []);
+
+  const sessionsRef = useRef(sessions);
+  useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
+
+  const runSession = useCallback(async (sessionId: string) => {
+    const session = sessionsRef.current.find((s) => s.id === sessionId);
+    if (!session) return;
+    const ds = sessionDataset(session);
+    if (!ds) { message.warning('数据集不存在'); return; }
+    const { numericCols } = sessionCols(session);
+    updateSession(sessionId, { running: true, results: null });
     try {
-      let result: { tables: ResultTable[]; conclusion: string; chartData?: ChartDataSource[]; rsm?: RSMResult } = { tables: [], conclusion: '' };
-
-      switch (analysisType) {
-        case 'descriptive':
-          result = { tables: [runDescriptive(rows, valueCols.length ? valueCols : numericCols)], conclusion: '' };
-          break;
-        case 'frequency': {
-          const col = valueCols[0];
-          if (col) result = { tables: [runFrequency(rows, col)], conclusion: '' };
-          break;
-        }
-        case 'normality': {
-          const r = runNormality(rows, valueCols.length ? valueCols : numericCols, alpha);
-          const chartData = Object.entries(r.qqData).map(([col, d]) => ({
-            chartType: 'qq',
-            title: `Q-Q 图: ${col}`,
-            data: {
-              backgroundColor: '#fff',
-              title: { text: `Q-Q 图: ${col}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-              tooltip: {},
-              grid: { left: 60, right: 30, top: 45, bottom: 45 },
-              xAxis: { type: 'value', name: '理论分位数', nameTextStyle: { fontFamily: 'Times New Roman' } },
-              yAxis: { type: 'value', name: '样本分位数', nameTextStyle: { fontFamily: 'Times New Roman' } },
-              series: [
-                { type: 'scatter', data: d.theoretical.map((th, i) => [+th.toFixed(5), +d.sample[i].toFixed(5)]), symbolSize: 5, itemStyle: { color: '#5470c6' } },
-                { type: 'line', data: [[d.theoretical[0], d.theoretical[0]], [d.theoretical[d.theoretical.length - 1], d.theoretical[d.theoretical.length - 1]]], symbol: 'none', lineStyle: { color: '#ccc', type: 'dashed' as const } },
-              ],
-            },
-          }));
-          result = { tables: [r.table], conclusion: '', chartData };
-          break;
-        }
-        case 'grouped-stats':
-          if (groupCol) result = { tables: [runGroupedStats(rows, valueCols.length ? valueCols : numericCols, groupCol)], conclusion: '' };
-          break;
-        case 'ttest-independent': {
-          if (valueCols[0] && groupCol) {
-            const r = runIndependentTTest(rows, valueCols[0], groupCol, alpha);
-            const bp = boxplotSeries(rows, valueCols[0], groupCol);
-            result = {
-              tables: [r.table], conclusion: r.conclusion,
-              chartData: [{
-                chartType: 'boxplot', title: `${valueCols[0]} 按 ${groupCol}`,
-                data: {
-                  backgroundColor: '#fff',
-                  title: { text: `${valueCols[0]} 按 ${groupCol}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-                  tooltip: {},
-                  grid: { left: 60, right: 30, top: 45, bottom: 45 },
-                  xAxis: { type: 'category', data: bp.groups, name: groupCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
-                  yAxis: { type: 'value', name: valueCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
-                  series: [{ type: 'boxplot', data: bp.box, itemStyle: { borderColor: '#5470c6' } }],
-                },
-              }],
-            };
-          }
-          break;
-        }
-        case 'ttest-paired': {
-          if (pairedCol1 && pairedCol2) {
-            const r = runPairedTTest(rows, pairedCol1, pairedCol2, alpha);
-            result = { tables: [r.table], conclusion: r.conclusion };
-          }
-          break;
-        }
-        case 'anova-oneway': {
-          if (valueCols[0] && groupCol) {
-            const r = runOneWayANOVA(rows, valueCols[0], groupCol, alpha);
-            const tukey = runTukeyHSD(rows, valueCols[0], groupCol, alpha);
-            const bp = boxplotSeries(rows, valueCols[0], groupCol);
-            result = {
-              tables: [r.table, tukey], conclusion: r.conclusion,
-              chartData: [{
-                chartType: 'boxplot', title: `ANOVA: ${valueCols[0]}`,
-                data: {
-                  backgroundColor: '#fff',
-                  title: { text: `ANOVA: ${valueCols[0]}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-                  tooltip: {},
-                  grid: { left: 60, right: 30, top: 45, bottom: 45 },
-                  xAxis: { type: 'category', data: bp.groups, name: groupCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
-                  yAxis: { type: 'value', name: valueCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
-                  series: [{ type: 'boxplot', data: bp.box, itemStyle: { borderColor: '#5470c6' } }],
-                },
-              }],
-            };
-          }
-          break;
-        }
-        case 'correlation': {
-          const r = runCorrelation(rows, valueCols.length ? valueCols : numericCols, corrMethod);
-          const corrCols = valueCols.length ? valueCols : numericCols;
-          const hmData: [number, number, number][] = [];
-          r.matrix.forEach((rowV, i) => rowV.forEach((v, j) => hmData.push([j, i, v])));
-          const hmMax = Math.max(...hmData.map((d) => Math.abs(d[2])), 0.1);
-          result = {
-            tables: [r.table], conclusion: '',
-            chartData: [{
-              chartType: 'heatmap', title: `${corrMethod} 相关矩阵`,
-              data: {
-                backgroundColor: '#fff',
-                title: { text: `${corrMethod} 相关矩阵`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-                tooltip: {},
-                grid: { left: 90, right: 80, top: 30, bottom: 45 },
-                xAxis: { type: 'category', data: corrCols, position: 'top', axisLabel: { rotate: 45, fontSize: 10 } },
-                yAxis: { type: 'category', data: corrCols, inverse: true },
-                visualMap: { min: -hmMax, max: hmMax, calculable: true, orient: 'vertical', right: 10,
-                  inRange: { color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] } },
-                series: [{ type: 'heatmap', data: hmData, label: { show: true, fontSize: 10 } }],
-              },
-            }],
-          };
-          break;
-        }
-        case 'linear-regression': {
-          if (xCols.length && yCol) {
-            const r = runLinearRegression(rows, xCols, yCol);
-            // 残差诊断图：拟合值 vs 残差（完整 ECharts option，避免函数剥离/原始数据误用）
-            const residData = r.fittedValues.map((f, i) => [+(+f).toFixed(5), +(+r.residuals[i]).toFixed(5)]);
-            const fitMin = Math.min(...r.fittedValues), fitMax = Math.max(...r.fittedValues);
-            const residOption = {
-              backgroundColor: '#fff',
-              title: { text: `${yCol} 残差诊断图`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-              tooltip: {},
-              grid: { left: 60, right: 30, top: 50, bottom: 45 },
-              xAxis: { type: 'value', name: '拟合值', nameTextStyle: { fontFamily: 'Times New Roman' } },
-              yAxis: { type: 'value', name: '残差', nameTextStyle: { fontFamily: 'Times New Roman' } },
-              series: [
-                { type: 'scatter', data: residData, symbolSize: 5, itemStyle: { color: '#91cc75' } },
-                { type: 'line', data: [[fitMin, 0], [fitMax, 0]], symbol: 'none', lineStyle: { color: '#ccc', type: 'dashed' as const } },
-              ],
-            };
-            result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'scatter', title: `${yCol} 残差诊断图`, data: residOption }] };
-          }
-          break;
-        }
-        case 'nonlinear-fit': {
-          if (xCols[0] && yCol) {
-            const r = runNonlinearFit(rows, xCols[0], yCol, modelName);
-            // 拟合曲线图：原始数据散点 + 模型曲线（完整 option）
-            const rawData = rows.map((row) => [Number(row[xCols[0]]), Number(row[yCol])]).filter((v) => !isNaN(v[0]) && !isNaN(v[1]));
-            const curveData = r.fitted.map((d) => [+(+d.x).toFixed(5), +(+d.y).toFixed(5)]);
-            const fitOption = {
-              backgroundColor: '#fff',
-              title: { text: `${modelName} 拟合: ${yCol}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-              tooltip: {},
-              grid: { left: 60, right: 30, top: 50, bottom: 45 },
-              xAxis: { type: 'value', name: xCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
-              yAxis: { type: 'value', name: yCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
-              series: [
-                { type: 'scatter', name: '观测值', data: rawData, symbolSize: 5, itemStyle: { color: '#5470c6' } },
-                { type: 'line', name: '拟合曲线', data: curveData, symbol: 'none', lineStyle: { color: '#d00', width: 2 } },
-              ],
-            };
-            result = { tables: [r.table], conclusion: r.conclusion, chartData: [{ chartType: 'scatter', title: `${modelName} 拟合曲线: ${yCol}`, data: fitOption }] };
-          }
-          break;
-        }
-        case 'rsm': {
-          if (factorCols.length >= 2 && responseCol) {
-            const r = runRSM(rows, factorCols, responseCol);
-            // Real chart options built from the fitted model (P0: previously saved
-            // { factorCols, responseCol } as echartsOption → blank/stale charts)
-            const charts = buildRsmCharts(r, factorCols, responseCol, rows);
-            const diag = buildRsmDiagnostics(r);
-            const chartData: ChartDataSource[] = [
-              { chartType: 'surface3d', title: '3D响应面', data: charts.surface3d },
-              { chartType: 'contour', title: '等高线图', data: charts.contour },
-              { chartType: 'heatmap', title: '响应面热力图', data: charts.heatmap },
-              { chartType: 'qq', title: '残差正态概率图', data: diag.qq },
-              { chartType: 'scatter', title: '残差 vs 拟合值', data: diag.residFit },
-              { chartType: 'bar', title: 'Cook 距离', data: diag.cooksD },
-            ];
-            const optimalRows: (string | number)[][] = r.optimal
-              ? [[r.optimal.y, r.optimal.values, r.optimal.boundary ? '边界' : '域内', r.optimal.predInterval]]
-              : [['—', '无解析驻点', '—', '—']];
-            result = {
-              tables: [
-                r.summary,
-                r.table,
-                r.anova,
-                r.residTable,
-                { title: '回归方程（编码变量）', headers: ['方程'], rows: [[r.equation], ...r.codedDefs.map((d) => [d])] },
-                { title: '规划求解（最优解）', headers: ['最优响应', '条件', '类型', '95%预测区间'], rows: optimalRows },
-              ],
-              conclusion: r.conclusion,
-              chartData,
-              rsm: r,
-            };
-          }
-          break;
-        }
-        case 'pca': {
-          const r = runPCA(rows, valueCols.length ? valueCols : numericCols);
-          const pcs = valueCols.length ? valueCols : numericCols;
-          // 碎石图：特征值柱状 + 累计方差贡献率折线（双轴，完整 option）
-          const totalVar = r.eigenvalues.reduce((a, b) => a + b, 0);
-          let cum = 0;
-          const cumVals = r.eigenvalues.map((ev) => { cum += ev / totalVar; return +(cum * 100).toFixed(1); });
-          const pcaLabels = r.eigenvalues.map((_, i) => `PC${i + 1}`);
-          const screeOption = {
-            backgroundColor: '#fff',
-            title: { text: 'PCA 碎石图', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-            tooltip: {},
-            legend: { data: ['特征值', '累计贡献率 %'], bottom: 5 },
-            grid: { left: 55, right: 55, top: 45, bottom: 55 },
-            xAxis: { type: 'category', data: pcaLabels },
-            yAxis: [
-              { type: 'value', name: '特征值', nameTextStyle: { fontFamily: 'Times New Roman' } },
-              { type: 'value', name: '累计贡献率 %', max: 100, nameTextStyle: { fontFamily: 'Times New Roman' } },
-            ],
-            series: [
-              { type: 'bar', name: '特征值', data: r.eigenvalues.map((ev) => +ev.toFixed(4)), itemStyle: { color: '#5470c6' } },
-              { type: 'line', name: '累计贡献率 %', yAxisIndex: 1, data: cumVals, symbolSize: 6, lineStyle: { color: '#d00' }, itemStyle: { color: '#d00' } },
-            ],
-          };
-          // 载荷矩阵（PC1/PC2 双载荷散点）+ 得分散点图
-          const loadingData = pcs.map((col, i) => ({ name: col, value: [+(+r.loadings[i][0]).toFixed(4), +(+r.loadings[i][1]).toFixed(4)] }));
-          const loadingsOption = {
-            backgroundColor: '#fff',
-            title: { text: 'PCA 载荷图 (PC1 vs PC2)', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-            tooltip: { formatter: (p: unknown) => { const v = (p as { data: { name: string; value: number[] } }).data; return `${v?.name}: (${v?.value?.[0]}, ${v?.value?.[1]})`; } },
-            grid: { left: 60, right: 30, top: 45, bottom: 45 },
-            xAxis: { type: 'value', name: 'PC1', nameTextStyle: { fontFamily: 'Times New Roman' } },
-            yAxis: { type: 'value', name: 'PC2', nameTextStyle: { fontFamily: 'Times New Roman' } },
-            series: [{ type: 'scatter', data: loadingData, symbolSize: 9, itemStyle: { color: '#5470c6' } }],
-          };
-          const scoresOption = {
-            backgroundColor: '#fff',
-            title: { text: 'PCA 得分散点图 (PC1 vs PC2)', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-            tooltip: {},
-            grid: { left: 60, right: 30, top: 45, bottom: 45 },
-            xAxis: { type: 'value', name: 'PC1', nameTextStyle: { fontFamily: 'Times New Roman' } },
-            yAxis: { type: 'value', name: 'PC2', nameTextStyle: { fontFamily: 'Times New Roman' } },
-            series: [{ type: 'scatter', data: r.scores.map((s) => [+s[0].toFixed(4), +s[1].toFixed(4)]), symbolSize: 6, itemStyle: { color: '#91cc75' } }],
-          };
-          result = {
-            tables: [r.table],
-            conclusion: '',
-            chartData: [
-              { chartType: 'bar', title: 'PCA 碎石图', data: screeOption },
-              { chartType: 'scatter', title: 'PCA 载荷图', data: loadingsOption },
-              { chartType: 'scatter', title: 'PCA 得分散点图', data: scoresOption },
-            ],
-          };
-          break;
-        }
-        case 'pipeline': {
-          const pipelineCols = valueCols.length ? valueCols : numericCols;
-          const tables: ResultTable[] = [];
-          const chartData: ChartDataSource[] = [];
-          const conclusions: string[] = [];
-
-          // ── Phase 1: Preprocessing ──
-          const missing = runMissingDiagnostic(rows, pipelineCols);
-          tables.push({ ...missing.table, title: '【阶段一】' + missing.table.title });
-
-          const outlier = runOutlierDetection(rows, pipelineCols);
-          tables.push({ ...outlier.table, title: '【阶段一】' + outlier.table.title });
-          const procRows = outlier.cappedRows;
-
-          const stdResult = runStandardization(procRows, pipelineCols);
-          tables.push({ ...stdResult.table, title: '【阶段一】' + stdResult.table.title });
-          const stdRows = stdResult.standardizedRows;
-          conclusions.push(`预处理完成：${pipelineCols.length} 个变量，${outlier.totalOutliers} 个异常值已盖帽，全部标准化 (μ=0, σ=1)`);
-
-          // ── Phase 2: Basic Statistics ──
-          const desc = runDescriptive(stdRows, pipelineCols);
-          tables.push({ ...desc, title: '【阶段二】' + desc.title });
-
-          const norm = runNormality(stdRows, pipelineCols, alpha);
-          tables.push({ ...norm.table, title: '【阶段二】' + norm.table.title });
-          const normalCount = norm.table.rows.filter((r) => r[4] === '是').length;
-          conclusions.push(`Shapiro-Wilk: ${normalCount}/${pipelineCols.length} 个变量服从正态分布`);
-
-          // Batch ANOVA with Levene check (variance ratio heuristic)
-          if (groupCol && pipelineCols.length > 0) {
-            const anovaHeaders = ['因变量', '方法', '统计量', 'P值', '方差比', '显著性'];
-            const anovaRows: (string | number)[][] = [];
-            for (const col of pipelineCols) {
-              const groups = extractByGroup(stdRows, col, groupCol);
-              const groupNames = Array.from(groups.keys());
-              const gData = groupNames.map((g) => groups.get(g)!).filter((v) => v.length > 1);
-              if (gData.length < 2) continue;
-              // Levene-like check: max/min variance ratio
-              const vars = gData.map((v) => variance(v));
-              const varRatio = Math.max(...vars) / Math.min(...vars);
-              if (varRatio < 3) {
-                // Standard ANOVA
-                const aov = runOneWayANOVA(stdRows, col, groupCol, alpha);
-                // Extract F and p from the standard ANOVA table
-                const aovRow = aov.table.rows[0] as (string | number)[];
-                const fVal = aovRow[4] as number;
-                const pVal = aovRow[5] as number;
-                const sig = pVal < 0.001 ? '***' : pVal < 0.01 ? '**' : pVal < 0.05 ? '*' : 'ns';
-                anovaRows.push([col, 'ANOVA', +fVal.toFixed(4), +Number(pVal).toFixed(6), +varRatio.toFixed(2), sig]);
-              } else {
-                // Use Kruskal-Wallis (non-parametric)
-                // Compute via ranks — simplified: use existing runOneWayANOVA on ranked data
-                const allVals: number[] = [];
-                for (const g of groupNames) allVals.push(...groups.get(g)!);
-                const sorted = [...allVals].sort((a, b) => a - b);
-                const rankMap = new Map<number, number>();
-                sorted.forEach((v, i) => rankMap.set(v, i + 1));
-                const rankedRows = stdRows.map((r) => {
-                  const newRow = { ...r };
-                  newRow[col] = rankMap.get(Number(r[col])) ?? 0;
-                  return newRow;
-                });
-                const kw = runOneWayANOVA(rankedRows, col, groupCol, alpha);
-                const kwRow = kw.table.rows[0] as (string | number)[];
-                const hVal = kwRow[4] as number;
-                const pVal = kwRow[5] as number;
-                const sig = pVal < 0.001 ? '***' : pVal < 0.01 ? '**' : pVal < 0.05 ? '*' : 'ns';
-                anovaRows.push([col, 'Kruskal-Wallis', +hVal.toFixed(4), +Number(pVal).toFixed(6), +varRatio.toFixed(2), sig]);
-              }
-            }
-            tables.push({ title: '【阶段二】单因素ANOVA（自动选择：方差比<3→ANOVA，否则→Kruskal-Wallis）', headers: anovaHeaders, rows: anovaRows });
-            const sigCount = anovaRows.filter((r) => typeof r[5] === 'string' && r[5] !== 'ns').length;
-            conclusions.push(`ANOVA: ${sigCount}/${anovaRows.length} 个变量组间差异显著`);
-          }
-
-          // ── Phase 3: Advanced Modeling ──
-          if (pipelineModels.includes('correlation')) {
-            const corr = runCorrelation(stdRows, pipelineCols, 'pearson');
-            tables.push({ ...corr.table, title: '【阶段三】' + corr.table.title });
-          }
-
-          if (pipelineModels.includes('rsm') && factorCols.length >= 2 && responseCol) {
-            try {
-              const rsm = runRSM(stdRows, factorCols, responseCol);
-              tables.push({ ...rsm.table, title: '【阶段三】' + rsm.table.title });
-              conclusions.push(`RSM: ${rsm.conclusion}`);
-            } catch { conclusions.push('RSM: 拟合失败（可能因素共线或数据不足）'); }
-          } else if (pipelineModels.includes('rsm')) {
-            conclusions.push('RSM: 跳过（需配置2-3个因素列和1个响应列）');
-          }
-
-          if (pipelineModels.includes('pca')) {
-            const pca = runPCA(stdRows, pipelineCols);
-            tables.push({ ...pca.table, title: '【阶段三】' + pca.table.title });
-            const totalVar = pca.eigenvalues.reduce((a, b) => a + b, 0);
-            const pc1 = pca.eigenvalues[0] / totalVar;
-            const pc2 = (pca.eigenvalues[0] + pca.eigenvalues[1]) / totalVar;
-            conclusions.push(`PCA: PC1解释 ${(pc1 * 100).toFixed(1)}%, 前2成分累计 ${(pc2 * 100).toFixed(1)}%`);
-            chartData.push({
-              chartType: 'scatter', title: 'PCA 得分图 (PC1 vs PC2)',
-              data: {
-                backgroundColor: '#fff',
-                title: { text: 'PCA 得分图 (PC1 vs PC2)', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-                tooltip: {},
-                grid: { left: 60, right: 30, top: 45, bottom: 45 },
-                xAxis: { type: 'value', name: 'PC1', nameTextStyle: { fontFamily: 'Times New Roman' } },
-                yAxis: { type: 'value', name: 'PC2', nameTextStyle: { fontFamily: 'Times New Roman' } },
-                series: [{ type: 'scatter', data: pca.scores.map((s) => [+s[0].toFixed(4), +s[1].toFixed(4)]), symbolSize: 6, itemStyle: { color: '#91cc75' } }],
-              },
-            });
-          }
-
-          result = { tables, conclusion: conclusions.join(' | '), chartData };
-          break;
-        }
-      }
-
-      setResults(result);
+      const result = computeAnalysis({
+        analysisType: session.analysisType,
+        rows: ds.rows,
+        alpha,
+        numericCols,
+        valueCols: session.valueCols,
+        groupCol: session.groupCol,
+        xCols: session.xCols,
+        yCol: session.yCol,
+        factorCols: session.factorCols,
+        responseCol: session.responseCol,
+        pairedCol1: session.pairedCol1,
+        pairedCol2: session.pairedCol2,
+        corrMethod: session.corrMethod,
+        modelName: session.modelName,
+        pipelineModels: session.pipelineModels,
+      });
+      updateSession(sessionId, { results: result });
 
       const config: AnalysisConfig = {
-        type: analysisType, datasetId: currentDataset.id,
-        valueCols: valueCols.length ? valueCols : undefined,
-        groupCol, xCols: xCols.length ? xCols : undefined, yCol,
-        factorCols: factorCols.length ? factorCols : undefined, responseCol,
-        method: corrMethod, modelName, pairedCol1, pairedCol2, alpha,
+        type: session.analysisType, datasetId: ds.id,
+        valueCols: session.valueCols.length ? session.valueCols : undefined,
+        groupCol: session.groupCol,
+        xCols: session.xCols.length ? session.xCols : undefined,
+        yCol: session.yCol,
+        factorCols: session.factorCols.length ? session.factorCols : undefined,
+        responseCol: session.responseCol,
+        method: session.corrMethod, modelName: session.modelName,
+        pairedCol1: session.pairedCol1, pairedCol2: session.pairedCol2, alpha,
       };
       const recordId = generateId();
       await addRecord({
         id: recordId, analysisConfig: config,
         result: { id: generateId(), config, tables: result.tables, conclusion: result.conclusion, chartData: result.chartData, timestamp: Date.now() },
-        datasetName: currentDataset.name, relatedChartIds: [], note: '', createdAt: Date.now(),
+        datasetName: ds.name, relatedChartIds: [], note: '', createdAt: Date.now(),
       });
-    } finally { setRunning(false); }
-  }, [currentDataset, analysisType, valueCols, groupCol, xCols, yCol, factorCols, responseCol, pairedCol1, pairedCol2, corrMethod, modelName, alpha, numericCols, addRecord]);
+    } catch (e) {
+      message.error('分析失败：' + String(e));
+    } finally {
+      updateSession(sessionId, { running: false });
+    }
+  }, [alpha, sessionDataset, sessionCols, updateSession, addRecord]);
+
+  const runSessionRef = useRef<(id: string) => Promise<void>>(async () => {});
+  useEffect(() => { runSessionRef.current = runSession; });
 
   const location = useLocation();
-  const runRef = useRef<() => Promise<void>>(async () => {});
-  useEffect(() => { runRef.current = run; });
-  const prefillApplied = useRef(false);
-  // 从历史记录"重新分析"进入：预填变量并自动运行
+  const bootstrapped = useRef(false);
+  // 首次进入：若有"重新分析"预填则创建对应会话并自动运行；否则创建默认会话
   useEffect(() => {
-    if (prefillApplied.current) return;
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
     const prefill = (location.state as { prefill?: AnalysisConfig } | null)?.prefill;
-    if (!prefill) return;
-    prefillApplied.current = true;
-    setAnalysisType(prefill.type);
-    setValueCols(prefill.valueCols ?? []);
-    setGroupCol(prefill.groupCol);
-    setXCols(prefill.xCols ?? []);
-    setYCol(prefill.yCol);
-    setFactorCols(prefill.factorCols ?? []);
-    setResponseCol(prefill.responseCol);
-    setPairedCol1(prefill.pairedCol1);
-    setPairedCol2(prefill.pairedCol2);
-    if (prefill.method) setCorrMethod(prefill.method);
-    if (prefill.modelName) setModelName(prefill.modelName);
-    const t = setTimeout(() => { void runRef.current(); }, 60);
-    return () => clearTimeout(t);
+    if (prefill) {
+      const id = createSession(prefill.type);
+      updateSession(id, {
+        valueCols: prefill.valueCols ?? [],
+        groupCol: prefill.groupCol,
+        xCols: prefill.xCols ?? [],
+        yCol: prefill.yCol,
+        factorCols: prefill.factorCols ?? [],
+        responseCol: prefill.responseCol,
+        pairedCol1: prefill.pairedCol1,
+        pairedCol2: prefill.pairedCol2,
+        corrMethod: prefill.method ?? 'pearson',
+        modelName: prefill.modelName ?? 'exp',
+      });
+      const t = setTimeout(() => { void runSessionRef.current(id); }, 60);
+      return () => clearTimeout(t);
+    }
+    createSession(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location]);
+  }, []);
 
-  const saveChartToModule = async (chartData: ChartDataSource) => {
+  const handleMethodClick = (key: AnalysisType) => {
+    const s = activeSession;
+    const pristine = !!s && !s.running && !s.results
+      && !s.valueCols.length && !s.xCols.length && !s.factorCols.length
+      && !s.pairedCol1 && !s.pairedCol2 && !s.groupCol && !s.yCol && !s.responseCol;
+    if (pristine) {
+      updateSession(s.id, { analysisType: key, checkedOutputs: defaultCheckedOutputs(key) });
+    } else {
+      createSession(key);
+    }
+  };
+
+  const saveChartToModule = async (chartData: ChartDataSource, sourceAnalysisId?: AnalysisType) => {
+    if (!currentDataset) { message.warning('无当前数据集'); return; }
     const cfg: ChartConfig = {
       id: generateId(), title: chartData.title, chartType: chartData.chartType as ChartType,
-      datasetId: currentDataset!.id, columnMapping: {}, echartsOption: chartData.data as Record<string, unknown>,
+      datasetId: currentDataset.id, columnMapping: {}, echartsOption: chartData.data as Record<string, unknown>,
       colorScheme: 'grayscale', legendPosition: 'right', fontSize: 0,
       xAxisLabel: '', yAxisLabel: '', createdAt: Date.now(),
-      sourceAnalysisId: analysisType ?? undefined,
+      sourceAnalysisId,
     };
     await addChart(cfg);
     message.success('图表已保存');
   };
 
-  const exportResults = () => {
-    if (!results || results.tables.length === 0) { message.warning('没有可导出的结果'); return; }
-    const allTables: string[] = [];
-    results.tables.forEach((t) => {
-      allTables.push(`\n${t.title}\n${t.headers.join(',')}`);
-      t.rows.forEach((row) => allTables.push(row.map((v) => typeof v === 'number' ? formatNumber(v, digits) : String(v ?? '')).join(',')));
-    });
-    if (results.conclusion) allTables.push(`\n结论,${results.conclusion}`);
-    const blob = new Blob(['﻿' + allTables.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const downloadCsv = (content: string, filename: string) => {
+    const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `analysis-${analysisType ?? 'result'}-${Date.now()}.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
-    message.success('分析结果已导出为 CSV');
   };
 
-  const copyResults = () => {
-    if (!results || results.tables.length === 0) { message.warning('没有可复制的结果'); return; }
-    const lines: string[] = [];
-    results.tables.forEach((t) => {
-      lines.push(`${t.title}\n${t.headers.join('\t')}`);
-      t.rows.forEach((row) => lines.push(row.map((v) => typeof v === 'number' ? formatNumber(v, digits) : String(v ?? '')).join('\t')));
-    });
-    if (results.conclusion) lines.push(`\n结论\t${results.conclusion}`);
-    navigator.clipboard.writeText(lines.join('\n')).then(() => message.success('已复制到剪贴板')).catch(() => message.error('复制失败'));
+  const renderModule = (mod: RenderedModule, session: AnalysisSession) => {
+    const exportMod = () => {
+      downloadCsv(moduleToCsv(mod, session.rsmEqForm), `module-${session.analysisType}-${mod.key}-${Date.now()}.csv`);
+      message.success('已导出 CSV');
+    };
+    const copyMod = () => {
+      navigator.clipboard.writeText(moduleToCsv(mod, session.rsmEqForm))
+        .then(() => message.success('已复制到剪贴板')).catch(() => message.error('复制失败'));
+    };
+    return (
+      <div key={mod.key} className="border border-slate-700/40 rounded-lg p-3 bg-white/[0.02] mb-3">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <Text strong style={{ fontSize: 12 }}>{mod.label}</Text>
+          <Space size={4}>
+            <Button size="small" icon={<DownloadOutlined />} onClick={exportMod}>导出</Button>
+            <Button size="small" icon={<CopyOutlined />} onClick={copyMod}>复制</Button>
+          </Space>
+        </div>
+        {mod.tables?.map((t, ti) => (
+          <div key={ti} style={{ marginBottom: 10 }}>
+            <Text strong style={{ fontSize: 12 }}>{t.title}</Text>
+            <Table
+              columns={t.headers.map((h, hi) => ({
+                title: h, dataIndex: h, key: h,
+                ellipsis: hi === 0,
+                render: hi === 0 ? (v: unknown) => <Tooltip title={String(v)}><span>{String(v)}</span></Tooltip> : undefined,
+              }))}
+              dataSource={t.rows.map((row, ri) => {
+                const obj: Record<string, unknown> = { _key: ri };
+                t.headers.forEach((h, hi) => { obj[h] = typeof row[hi] === 'number' ? formatNumber(row[hi] as number, digits) : row[hi]; });
+                return obj;
+              })}
+              rowKey="_key" size="small" bordered pagination={false} scroll={{ x: 'max-content' }} />
+          </div>
+        ))}
+        {mod.equation && (
+          <Alert type="info" showIcon style={{ marginBottom: 10 }} message={
+            <Space direction="vertical" size={4}>
+              <Space size={8}>
+                <Text strong style={{ fontSize: 12 }}>回归方程</Text>
+                {session.analysisType === 'rsm' && (
+                  <Radio.Group size="small" value={session.rsmEqForm}
+                    onChange={(e) => updateSession(session.id, { rsmEqForm: e.target.value as 'coded' | 'actual' })}>
+                    <Radio.Button value="coded">编码变量</Radio.Button>
+                    <Radio.Button value="actual">实际变量</Radio.Button>
+                  </Radio.Group>
+                )}
+              </Space>
+              <Text code style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                {session.rsmEqForm === 'coded' ? mod.equation.coded : mod.equation.actual}
+              </Text>
+              {session.rsmEqForm === 'coded' && (mod.equation.codedDefs ?? []).length > 0 &&
+                <Text type="secondary" style={{ fontSize: 11 }}>{(mod.equation.codedDefs ?? []).join('　')}</Text>}
+            </Space>
+          } />
+        )}
+        {mod.optimal !== undefined && (mod.optimal ? (
+          <Alert type="success" showIcon style={{ marginBottom: 10 }} message={
+            <Space direction="vertical" size={2}>
+              <Text>最优响应 = <Text strong style={{ fontFamily: 'Times New Roman', fontSize: 14 }}>{formatNumber(mod.optimal.y, digits)}</Text></Text>
+              <Text style={{ fontSize: 12 }}>条件：{mod.optimal.values}{mod.optimal.boundary ? '（边界最优）' : '（域内驻点）'}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>95% 预测区间：{mod.optimal.predInterval}</Text>
+            </Space>
+          } />
+        ) : <Alert type="warning" showIcon message="未找到解析最优解（模型奇异或驻点在实验域外）" style={{ marginBottom: 10 }} />)}
+        {mod.conclusion && <Alert type="success" message={mod.conclusion} style={{ marginBottom: 10 }} />}
+        {mod.chart && (
+          <div>
+            <div className="glass-card" style={{ padding: 8, background: '#fff', borderRadius: 6 }}>
+              <ReactECharts
+                ref={(e) => { chartRefs.current[`${session.id}:${mod.key}`] = e; }}
+                option={mod.chart.data as Record<string, unknown>} style={{ height: 340, background: '#fff' }} notMerge />
+            </div>
+            <Space style={{ marginTop: 8 }}>
+              <Button size="small" icon={<DownloadOutlined />} onClick={() => {
+                const inst = chartRefs.current[`${session.id}:${mod.key}`]?.getEchartsInstance();
+                if (inst) exportPNG(inst, mod.chart!.title); else message.warning('图表未就绪');
+              }}>导出 PNG</Button>
+              <Button size="small" icon={<SaveOutlined />} onClick={() => saveChartToModule(mod.chart!, session.analysisType)}>保存到图表模块</Button>
+            </Space>
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const renderSlot = (label: string, mode: 'single' | 'multi' | undefined, value: string[] | string | undefined, onChange: (v: string[] | string | undefined) => void, options: string[]) => {
-    if (mode === 'single') return <Space><Text>{label}:</Text><Select style={{ width: 180 }} value={value as string || undefined} onChange={(v) => onChange(v)} options={options.map((o) => ({ label: o, value: o }))} allowClear placeholder={`选择 ${label}`} /></Space>;
-    if (mode === 'multi') return <Space><Text>{label}:</Text><Select mode="multiple" style={{ minWidth: 200 }} value={(value as string[]) || []} onChange={(v) => onChange(v)} options={options.map((o) => ({ label: o, value: o }))} placeholder={`选择 ${label}`} /></Space>;
+  const renderSlot = (label: string, mode: 'single' | 'multi' | undefined, value: string[] | string | undefined,
+    onChange: (v: string[] | string | undefined) => void, options: string[]) => {
+    if (mode === 'single') return <Space><Text style={{ fontSize: 12 }}>{label}:</Text><Select size="small" style={{ width: 160 }} value={value as string || undefined} onChange={(v) => onChange(v)} options={options.map((o) => ({ label: o, value: o }))} allowClear placeholder={`选择 ${label}`} /></Space>;
+    if (mode === 'multi') return <Space><Text style={{ fontSize: 12 }}>{label}:</Text><Select size="small" mode="multiple" style={{ minWidth: 180 }} value={(value as string[]) || []} onChange={(v) => onChange(v)} options={options.map((o) => ({ label: o, value: o }))} placeholder={`选择 ${label}`} /></Space>;
     return null;
   };
 
-  if (!currentDataset) {
+  if (datasetList.length === 0 && !currentDataset) {
     return (
       <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
         <PageHeader title="实验数据分析" description="选择统计方法和数据列进行分析" />
@@ -569,15 +347,12 @@ export default function AnalysisPage() {
   const groups = [...new Set(ANALYSES.map((a) => a.group))];
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
-      <PageHeader title="实验数据分析" description="选择统计方法和数据列进行分析">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
+      <PageHeader title="实验数据分析" description="多个数据集可并行分析，勾选 √ 控制输出内容">
         <span className="tag text-indigo-300 border-indigo-500/20 bg-indigo-500/5">α = {alpha}</span>
-        <button className="btn-primary text-sm" onClick={run} disabled={!activeAnalysis || running}>
-          <PlayCircleOutlined /> 运行分析
-        </button>
       </PageHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: analysis menu */}
         <div className="lg:col-span-1 glass-card-static p-3 h-fit">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2">分析方法</h3>
@@ -585,180 +360,171 @@ export default function AnalysisPage() {
             <div key={g} className="mb-3">
               <p className="text-[10px] font-medium text-slate-600 uppercase tracking-wider px-2 mb-1">{g}</p>
               <div className="space-y-0.5">
-                {ANALYSES.filter((a) => a.group === g).map((a) => {
-                  const isActive = analysisType === a.key;
-                  return (
-                    <button
-                      key={a.key}
-                      onClick={() => { setAnalysisType(a.key); setResults(null); setValueCols([]); setGroupCol(undefined); setXCols([]); setYCol(undefined); setFactorCols([]); setResponseCol(undefined); }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs transition-all ${
-                        isActive
-                          ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] border border-transparent'
-                      }`}
-                    >{a.label}</button>
-                  );
-                })}
+                {ANALYSES.filter((a) => a.group === g).map((a) => (
+                  <button
+                    key={a.key}
+                    onClick={() => handleMethodClick(a.key)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs transition-all ${
+                      activeSession?.analysisType === a.key
+                        ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] border border-transparent'
+                    }`}
+                  >{a.label}</button>
+                ))}
               </div>
             </div>
           ))}
         </div>
 
-          {/* Center: variable config + results */}
-          <div className="lg:col-span-3 space-y-6">
-            <div className="glass-card-static p-5">
-            {activeAnalysis && (
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Space wrap>
-                  {activeAnalysis.needs.valueCols && renderSlot('变量', activeAnalysis.needs.valueCols, valueCols, (v) => setValueCols(Array.isArray(v) ? v : v ? [v] : []), numericCols)}
-                  {activeAnalysis.needs.groupCol && renderSlot('分组列', 'single', groupCol, (v) => setGroupCol(v as string | undefined), catCols)}
-                  {activeAnalysis.needs.xCols && renderSlot('自变量 X', activeAnalysis.needs.xCols, xCols, (v) => setXCols(Array.isArray(v) ? v : v ? [v] : []), numericCols)}
-                  {activeAnalysis.needs.yCol && renderSlot('因变量 Y', 'single', yCol, (v) => setYCol(v as string | undefined), numericCols)}
-                  {activeAnalysis.needs.factorCols && renderSlot('因素列(2-3个)', 'multi', factorCols, (v) => setFactorCols(Array.isArray(v) ? v : []), numericCols)}
-                  {activeAnalysis.needs.responseCol && renderSlot('响应列', 'single', responseCol, (v) => setResponseCol(v as string | undefined), numericCols)}
-                  {activeAnalysis.needs.paired && (<>
-                    {renderSlot('配对列1', 'single', pairedCol1, (v) => setPairedCol1(v as string | undefined), numericCols)}
-                    {renderSlot('配对列2', 'single', pairedCol2, (v) => setPairedCol2(v as string | undefined), numericCols)}
-                  </>)}
-                  {activeAnalysis.needs.method && <Space><Text>方法:</Text><Select style={{ width: 120 }} value={corrMethod} onChange={setCorrMethod} options={[{ label: 'Pearson', value: 'pearson' }, { label: 'Spearman', value: 'spearman' }, { label: 'Kendall', value: 'kendall' }]} /></Space>}
-                  {activeAnalysis.needs.model && <Space><Text>模型:</Text><Select style={{ width: 120 }} value={modelName} onChange={setModelName} options={[{ label: '指数', value: 'exp' }, { label: '幂函数', value: 'power' }, { label: 'Gaussian', value: 'gauss' }, { label: '线性', value: 'linear' }]} /></Space>}
-                  {activeAnalysis.needs.pipeline && (
-                    <Space direction="vertical" size={2}>
-                      <Text style={{ fontSize: 12 }}>高级建模选项:</Text>
-                      <Checkbox.Group value={pipelineModels} onChange={(v) => setPipelineModels(v as string[])}
-                        options={[
-                          { label: '相关矩阵', value: 'correlation' },
-                          { label: '响应面 (RSM)', value: 'rsm' },
-                          { label: '主成分 (PCA)', value: 'pca' },
-                        ]} />
-                    </Space>
-                  )}
-                </Space>
-              </Space>
-            )}
+        {/* Center: result cards */}
+        <div className="lg:col-span-3">
+          {sessions.length === 0 ? (
+            <div className="glass-card-static p-8 flex justify-center">
+              <Empty description="点击左侧方法或右侧『添加分析』开始" />
             </div>
-
-            {results && (
-              <div className="glass-card-static p-5">
-                {analysisType === 'pipeline' ? (
-                  /* Phase-grouped rendering for pipeline */
-                  ['【阶段一】', '【阶段二】', '【阶段三】'].map((phase) => {
-                    const phaseTables = results.tables.filter((t) => t.title.startsWith(phase));
-                    if (phaseTables.length === 0) return null;
-                    const phaseLabel = phase === '【阶段一】' ? '预处理与诊断' : phase === '【阶段二】' ? '基础统计与假设检验' : '高级建模与可视化';
-                    return (
-                      <div key={phase} style={{ marginBottom: 20 }}>
-                        <Divider orientation="left" style={{ fontSize: 14, fontWeight: 600 }}>{phaseLabel}</Divider>
-                        {phaseTables.map((t, i) => (
-                          <div key={i} style={{ marginBottom: 12 }}>
-                            <Text strong style={{ fontSize: 12 }}>{t.title.replace(phase, '')}</Text>
-                            <Table columns={t.headers.map((h) => ({ title: h, dataIndex: h, key: h }))}
-                              dataSource={t.rows.map((row, ri) => {
-                                const obj: Record<string, unknown> = { _key: ri };
-                                t.headers.forEach((h, hi) => { obj[h] = typeof row[hi] === 'number' ? formatNumber(row[hi] as number, digits) : row[hi]; });
-                                return obj;
-                              })}
-                              rowKey="_key" size="small" bordered pagination={false} scroll={{ x: 'max-content' }} />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })
-                ) : (
-                  /* Flat rendering for single analyses */
-                  results.tables
-                    // equation/optimal already shown in the RSM panel above
-                    .filter((t) => analysisType !== 'rsm' || (t.title !== '回归方程（编码变量）' && t.title !== '规划求解（最优解）'))
-                    .map((t, i) => (
-                    <div key={i} style={{ marginBottom: 16 }}>
-                      <Text strong>{t.title}</Text>
-                      <Table
-                        columns={t.headers.map((h, hi) => ({
-                          title: h, dataIndex: h, key: h,
-                          // P2-8: first column variable names — ellipsis + tooltip, never truncated
-                          ellipsis: hi === 0,
-                          render: hi === 0 ? (v: unknown) => <Tooltip title={String(v)}><span>{String(v)}</span></Tooltip> : undefined,
-                        }))}
-                        dataSource={t.rows.map((row, ri) => {
-                          const obj: Record<string, unknown> = { _key: ri };
-                          t.headers.forEach((h, hi) => { obj[h] = typeof row[hi] === 'number' ? formatNumber(row[hi] as number, digits) : row[hi]; });
-                          return obj;
-                        })}
-                        rowKey="_key" size="small" bordered pagination={false} scroll={{ x: 'max-content' }} />
+          ) : (
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
+              {sessions.map((s) => {
+                const ds = sessionDataset(s);
+                const def = ANALYSES.find((a) => a.key === s.analysisType);
+                const isActive = s.id === activeSessionId;
+                const modules = s.results ? applyOutputFilter(s.analysisType, s.results, s.checkedOutputs, { modelName: s.modelName }) : [];
+                return (
+                  <div key={s.id}
+                    className={`glass-card-static p-4 cursor-pointer transition-all ${isActive ? 'ring-1 ring-indigo-500/50' : 'hover:ring-1 hover:ring-slate-600'}`}
+                    onClick={() => setActiveSessionId(s.id)}>
+                    <div className="flex items-center justify-between gap-2 mb-2" onClick={(e) => e.stopPropagation()}>
+                      <Space size={6}>
+                        <Text strong style={{ fontSize: 13 }}>{def?.label ?? s.analysisType}</Text>
+                        <Text type="secondary" style={{ fontSize: 11 }}>{ds?.name ?? '（数据集已删除）'}</Text>
+                        {s.running && <Spin size="small" />}
+                      </Space>
+                      <Button size="small" type="text" icon={<CloseOutlined />} onClick={() => removeSession(s.id)} />
                     </div>
-                  )))}
-                {analysisType === 'rsm' && results.rsm && (
-                  <div style={{ marginBottom: 20 }}>
-                    {/* 回归方程文本 (P2-9) */}
-                    <Alert type="info" showIcon style={{ marginBottom: 12 }}
-                      message={<Space direction="vertical" size={4}>
-                        <Space size={8}>
-                          <Text strong style={{ fontSize: 13 }}>回归方程</Text>
-                          {/* 编码值/实际值切换 (附加13) */}
-                          <Radio.Group size="small" value={rsmEqForm} onChange={(e) => setRsmEqForm(e.target.value as 'coded' | 'actual')}>
-                            <Radio.Button value="coded">编码变量</Radio.Button>
-                            <Radio.Button value="actual">实际变量</Radio.Button>
-                          </Radio.Group>
-                        </Space>
-                        <Text code style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{rsmEqForm === 'coded' ? results.rsm.equation : results.rsm.equationActual}</Text>
-                        {rsmEqForm === 'coded' && <Text type="secondary" style={{ fontSize: 12 }}>{results.rsm.codedDefs.join('　')}</Text>}
-                      </Space>} />
-                    {/* 规划求解 (P1-7) */}
-                    {results.rsm.optimal ? (
-                      <Alert type="success" showIcon style={{ marginBottom: 12 }} message={
-                        <Space direction="vertical" size={2}>
-                          <Text>最优响应 = <Text strong style={{ fontFamily: 'Times New Roman', fontSize: 15 }}>{formatNumber(results.rsm.optimal.y, digits)}</Text></Text>
-                          <Text style={{ fontSize: 12 }}>条件：{results.rsm.optimal.values}{results.rsm.optimal.boundary ? '（边界最优）' : '（域内驻点）'}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>95% 预测区间：{results.rsm.optimal.predInterval}</Text>
-                        </Space>} />
-                    ) : <Alert type="warning" showIcon message="未找到解析最优解（模型奇异或驻点在实验域外）" style={{ marginBottom: 12 }} />}
-                    {/* 图表标签页：每个图表独立实例 + 独立导出 (P0-2/3/4) */}
-                    <Tabs destroyInactiveTabPane
-                      items={(results.chartData ?? []).map((cd) => ({
-                        key: cd.chartType,
-                        label: cd.title,
-                        children: (
-                          <div>
-                            <div className="glass-card" style={{ padding: 8, background: '#fff', borderRadius: 6 }}>
-                              <ReactECharts ref={(e) => { rsmChartRefs.current[cd.chartType] = e; }} option={cd.data as Record<string, unknown>} style={{ height: 420, background: '#fff' }} notMerge />
-                            </div>
-                            <Space style={{ marginTop: 8 }}>
-                              <Button icon={<DownloadOutlined />} onClick={() => { const inst = rsmChartRefs.current[cd.chartType]?.getEchartsInstance(); if (inst) exportPNG(inst, cd.title); else message.warning('图表未就绪'); }}>导出 PNG</Button>
-                              <Button icon={<SaveOutlined />} onClick={() => saveChartToModule(cd)}>保存到图表模块</Button>
-                            </Space>
-                          </div>
-                        ),
-                      }))}
-                    />
+                    <div onClick={(e) => e.stopPropagation()}>
+                      {s.running ? (
+                        <div className="flex justify-center py-8"><Spin /></div>
+                      ) : s.results ? (
+                        modules.length > 0 ? (
+                          modules.map((m) => renderModule(m, s))
+                        ) : (
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未勾选输出项，请在右侧功能栏勾选 √" />
+                        )
+                      ) : (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="运行分析后在此展示结果" />
+                      )}
+                    </div>
                   </div>
-                )}
-                {results.conclusion && <Alert type="success" message={results.conclusion} style={{ marginBottom: 16 }} />}
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-                <Space style={{ marginBottom: 16 }}>
-                  <Button icon={<DownloadOutlined />} onClick={exportResults}>导出 CSV</Button>
-                  <Button icon={<CopyOutlined />} onClick={copyResults}>复制结果</Button>
-                </Space>
-
-                {results.chartData?.map((cd, i) => (
-                  <Button key={i} icon={<SaveOutlined />} onClick={() => saveChartToModule(cd)} style={{ marginRight: 8 }}>
-                    保存图表: {cd.title}
-                  </Button>
-                ))}
-              </div>
-            )}
+        {/* Right: session control + output checklist */}
+        <div className="lg:col-span-1 space-y-4">
+          <div className="glass-card-static p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">分析会话</h3>
+              <Button size="small" type="primary" ghost icon={<PlusOutlined />}
+                onClick={() => createSession(activeSession?.analysisType ?? null)}>添加分析</Button>
+            </div>
+            {sessions.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>暂无会话</Text>}
+            <div className="space-y-1">
+              {sessions.map((s) => {
+                const def = ANALYSES.find((a) => a.key === s.analysisType);
+                const ds = sessionDataset(s);
+                return (
+                  <div key={s.id}
+                    className={`flex items-center justify-between px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all ${
+                      s.id === activeSessionId ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20' : 'text-slate-400 hover:bg-white/[0.02] border border-transparent'
+                    }`}
+                    onClick={() => setActiveSessionId(s.id)}>
+                    <span className="truncate">{def?.label} · {ds?.name ?? '无数据集'}</span>
+                    <Button size="small" type="text" icon={<CloseOutlined />} onClick={(e) => { e.stopPropagation(); removeSession(s.id); }} />
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-      </div>
+          {activeSession && activeDef && (
+            <>
+              <div className="glass-card-static p-4 max-h-[45vh] overflow-y-auto">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">变量配置</h3>
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  <Space>
+                    <Text style={{ fontSize: 12 }}>数据集:</Text>
+                    <Select size="small" style={{ width: 180 }} value={activeSession.datasetId}
+                      onChange={(v) => updateSession(activeSession.id, { datasetId: v })}
+                      options={datasetList.map((d) => ({ label: d.name, value: d.id }))} />
+                  </Space>
+                  <Space>
+                    <Text style={{ fontSize: 12 }}>方法:</Text>
+                    <Select size="small" style={{ width: 180 }} value={activeSession.analysisType}
+                      onChange={(v) => updateSession(activeSession.id, { analysisType: v as AnalysisType, checkedOutputs: defaultCheckedOutputs(v as AnalysisType) })}
+                      options={ANALYSES.map((a) => ({ label: a.label, value: a.key }))} />
+                  </Space>
+                  {(() => {
+                    const { numericCols, catCols } = sessionCols(activeSession);
+                    return (
+                      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                        {activeDef.needs.valueCols && renderSlot('变量', activeDef.needs.valueCols, activeSession.valueCols, (v) => updateSession(activeSession.id, { valueCols: Array.isArray(v) ? v : v ? [v] : [] }), numericCols)}
+                        {activeDef.needs.groupCol && renderSlot('分组列', 'single', activeSession.groupCol, (v) => updateSession(activeSession.id, { groupCol: v as string | undefined }), catCols)}
+                        {activeDef.needs.xCols && renderSlot('自变量 X', activeDef.needs.xCols, activeSession.xCols, (v) => updateSession(activeSession.id, { xCols: Array.isArray(v) ? v : v ? [v] : [] }), numericCols)}
+                        {activeDef.needs.yCol && renderSlot('因变量 Y', 'single', activeSession.yCol, (v) => updateSession(activeSession.id, { yCol: v as string | undefined }), numericCols)}
+                        {activeDef.needs.factorCols && renderSlot('因素列(2-3个)', 'multi', activeSession.factorCols, (v) => updateSession(activeSession.id, { factorCols: Array.isArray(v) ? v : [] }), numericCols)}
+                        {activeDef.needs.responseCol && renderSlot('响应列', 'single', activeSession.responseCol, (v) => updateSession(activeSession.id, { responseCol: v as string | undefined }), numericCols)}
+                        {activeDef.needs.paired && (<>
+                          {renderSlot('配对列1', 'single', activeSession.pairedCol1, (v) => updateSession(activeSession.id, { pairedCol1: v as string | undefined }), numericCols)}
+                          {renderSlot('配对列2', 'single', activeSession.pairedCol2, (v) => updateSession(activeSession.id, { pairedCol2: v as string | undefined }), numericCols)}
+                        </>)}
+                        {activeDef.needs.method && <Space><Text style={{ fontSize: 12 }}>方法:</Text><Select size="small" style={{ width: 120 }} value={activeSession.corrMethod} onChange={(v) => updateSession(activeSession.id, { corrMethod: v })} options={[{ label: 'Pearson', value: 'pearson' }, { label: 'Spearman', value: 'spearman' }, { label: 'Kendall', value: 'kendall' }]} /></Space>}
+                        {activeDef.needs.model && <Space><Text style={{ fontSize: 12 }}>模型:</Text><Select size="small" style={{ width: 120 }} value={activeSession.modelName} onChange={(v) => updateSession(activeSession.id, { modelName: v })} options={[{ label: '指数', value: 'exp' }, { label: '幂函数', value: 'power' }, { label: 'Gaussian', value: 'gauss' }, { label: '线性', value: 'linear' }]} /></Space>}
+                        {activeDef.needs.pipeline && (
+                          <Space direction="vertical" size={2}>
+                            <Text style={{ fontSize: 12 }}>高级建模选项:</Text>
+                            <Checkbox.Group value={activeSession.pipelineModels} onChange={(v) => updateSession(activeSession.id, { pipelineModels: v as string[] })}
+                              options={[
+                                { label: '相关矩阵', value: 'correlation' },
+                                { label: '响应面 (RSM)', value: 'rsm' },
+                                { label: '主成分 (PCA)', value: 'pca' },
+                              ]} />
+                          </Space>
+                        )}
+                      </Space>
+                    );
+                  })()}
+                </Space>
+              </div>
 
-      {/* Available columns bar */}
-      <div className="glass-card-static px-4 py-2 mt-4 flex flex-wrap items-center gap-1">
-        <span className="text-xs text-slate-500 mr-2">可用列:</span>
-        {numericCols.map((c) => <Button key={c} size="small" type="text" onClick={() => {
-          if (valueCols.includes(c)) setValueCols(valueCols.filter((v) => v !== c));
-          else setValueCols([...valueCols, c]);
-        }}>{c} 🔢</Button>)}
-        {catCols.map((c) => <Button key={c} size="small" type="text" disabled={activeAnalysis?.needs.groupCol !== true}
-          onClick={() => setGroupCol(groupCol === c ? undefined : c)}>{c} 🔤</Button>)}
+              <div className="glass-card-static p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">输出项 (√ 控制)</h3>
+                  <Space size={4}>
+                    <Button size="small" onClick={() => updateSession(activeSession.id, { checkedOutputs: OUTPUT_MODULES[activeSession.analysisType]?.map((m) => m.key) ?? [] })}>全选</Button>
+                    <Button size="small" onClick={() => updateSession(activeSession.id, { checkedOutputs: [] })}>清空</Button>
+                  </Space>
+                </div>
+                <Checkbox.Group style={{ width: '100%' }} value={activeSession.checkedOutputs}
+                  onChange={(v) => updateSession(activeSession.id, { checkedOutputs: v as string[] })}>
+                  <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                    {(OUTPUT_MODULES[activeSession.analysisType] ?? []).map((m) => (
+                      <Checkbox key={m.key} value={m.key} style={{ width: '100%' }}>
+                        <span style={{ fontSize: 12 }}>{m.label}</span>
+                      </Checkbox>
+                    ))}
+                  </Space>
+                </Checkbox.Group>
+                <Button type="primary" block icon={<PlayCircleOutlined />} style={{ marginTop: 12 }}
+                  disabled={activeSession.running}
+                  onClick={() => void runSession(activeSession.id)}>
+                  {activeSession.running ? '运行中…' : '运行分析'}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
