@@ -18,7 +18,7 @@ const NAV = [
 
 function Logo() {
   return (
-    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex-shrink-0">
+    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent flex-shrink-0">
       <FlaskConical className="h-4 w-4 text-white" />
     </div>
   );
@@ -28,14 +28,14 @@ function DatasetPill() {
   const currentDataset = useDataStore((s) => s.currentDataset);
   return (
     <div className="px-2 pb-2">
-      <div className="flex items-center gap-2 rounded-lg px-2.5 py-2 bg-white/[0.03] border border-white/5 min-w-0">
-        <Database className="h-3.5 w-3.5 text-indigo-400 flex-shrink-0" />
+      <div className="flex items-center gap-2 rounded-lg px-2.5 py-2 bg-[var(--bg-glass)] border-[var(--border-thin)] min-w-0">
+        <Database className="h-3.5 w-3.5 text-accent-text flex-shrink-0" />
         <div className="min-w-0">
-          <p className="text-[11px] text-slate-400 truncate">
+          <p className="text-[11px] text-[var(--color-text-secondary)] truncate">
             {currentDataset ? currentDataset.name : '未加载数据'}
           </p>
           {currentDataset && (
-            <p className="text-[10px] text-slate-500">{currentDataset.rowCount}行 × {currentDataset.colCount}列</p>
+            <p className="text-[10px] text-[var(--color-text-tertiary)]">{currentDataset.rowCount}行 × {currentDataset.colCount}列</p>
           )}
         </div>
       </div>
@@ -49,15 +49,15 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-40 flex h-full flex-col border-r border-white/5 bg-black/40 backdrop-blur-2xl transition-all duration-300 ${
+      className={`fixed left-0 top-0 z-40 flex h-full flex-col border-r-[var(--border-thin)] bg-[var(--bg-sidebar)] backdrop-blur-2xl transition-all duration-300 ${
         collapsed ? 'w-16' : 'w-56'
       }`}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center justify-between border-b border-white/5 px-4">
+      <div className="flex h-16 items-center justify-between border-b-[var(--border-thin)] px-4">
         <div className="flex items-center gap-2.5">
           <Logo />
-          {!collapsed && <span className="text-sm font-bold tracking-tight text-white">WaveSight</span>}
+          {!collapsed && <span className="text-sm font-bold tracking-tight text-[var(--color-text-primary)]">WaveSight</span>}
         </div>
       </div>
 
@@ -80,12 +80,12 @@ export default function Sidebar({ collapsed, onToggle }: { collapsed: boolean; o
       </nav>
 
       {/* Dataset + collapse toggle */}
-      <div className="border-t border-white/5">
+      <div className="border-t-[var(--border-thin)]">
         {!collapsed && <DatasetPill />}
         <div className="p-2">
           <button
             onClick={onToggle}
-            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 transition hover:bg-white/5 hover:text-slate-300"
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--color-text-tertiary)] transition hover:bg-[var(--color-accent-light)] hover:text-[var(--color-text-secondary)]"
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /> 收起</>}
           </button>
@@ -103,24 +103,24 @@ export function MobileHeader() {
 
   return (
     <>
-      <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-white/5 bg-black/60 backdrop-blur-xl px-4 lg:hidden">
+      <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b-[var(--border-thin)] bg-[var(--bg-topbar)] backdrop-blur-xl px-4 lg:hidden">
         <div className="flex items-center gap-2.5 min-w-0">
           <Logo />
-          <span className="text-sm font-bold text-white flex-shrink-0">WaveSight</span>
+          <span className="text-sm font-bold text-[var(--color-text-primary)] flex-shrink-0">WaveSight</span>
           {currentDataset && (
-            <span className="tag text-[10px] text-indigo-300 border-indigo-500/20 bg-indigo-500/10 truncate">
+            <span className="tag text-[10px] text-accent-text border-accent-border bg-accent-light truncate">
               {currentDataset.name}
             </span>
           )}
         </div>
-        <button onClick={() => setMobileOpen(!mobileOpen)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white flex-shrink-0">
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="rounded-lg p-2 text-[var(--color-text-tertiary)] hover:bg-[var(--color-accent-light)] hover:text-[var(--color-text-primary)] flex-shrink-0">
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </header>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)}>
-          <div className="fixed left-0 top-14 h-full w-52 bg-[#0a0a1a] border-r border-white/5 p-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)}>
+          <div className="fixed left-0 top-14 h-full w-52 bg-[var(--bg-sidebar)] border-r-[var(--border-thin)] p-4" onClick={(e) => e.stopPropagation()}>
             <nav className="space-y-1">
               {NAV.map((item) => {
                 const isActive = location.pathname === item.href;

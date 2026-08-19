@@ -609,10 +609,10 @@ export default function ChartsPage() {
                   <ReactECharts option={renderOption(c)} style={{ height: 144, background: '#fff' }} notMerge />
                 </div>
                 <div className="p-3">
-                  <p className="text-sm font-medium text-slate-200 truncate group-hover:text-white">{c.title}</p>
+                  <p className="text-sm font-medium text-[var(--color-text-primary)] truncate group-hover:text-accent-text">{c.title}</p>
                   <div className="mt-1.5 flex items-center justify-between">
                     <span className="tag text-xs">{CHART_LABELS[c.chartType]}</span>
-                    <span className="text-[10px] text-slate-500">{new Date(c.createdAt).toLocaleDateString('zh-CN')}</span>
+                    <span className="text-[10px] text-[var(--color-text-tertiary)]">{new Date(c.createdAt).toLocaleDateString('zh-CN')}</span>
                   </div>
                 </div>
               </div>

@@ -13,19 +13,19 @@ import DataTable from '@/components/data/DataTable';
 import type { ColumnMeta } from '@/types/data';
 
 const ACTION_TYPE: Record<string, { label: string; color: string }> = {
-  descriptive: { label: '描述', color: 'text-purple-400 bg-purple-500/10' },
-  frequency: { label: '频数', color: 'text-purple-400 bg-purple-500/10' },
-  normality: { label: '正态', color: 'text-purple-400 bg-purple-500/10' },
-  'grouped-stats': { label: '分组', color: 'text-purple-400 bg-purple-500/10' },
-  'ttest-independent': { label: 't检', color: 'text-purple-400 bg-purple-500/10' },
-  'ttest-paired': { label: 't检', color: 'text-purple-400 bg-purple-500/10' },
-  'anova-oneway': { label: 'ANOVA', color: 'text-purple-400 bg-purple-500/10' },
-  correlation: { label: '相关', color: 'text-purple-400 bg-purple-500/10' },
-  'linear-regression': { label: '回归', color: 'text-purple-400 bg-purple-500/10' },
-  'nonlinear-fit': { label: '拟合', color: 'text-purple-400 bg-purple-500/10' },
-  rsm: { label: 'RSM', color: 'text-purple-400 bg-purple-500/10' },
-  pca: { label: 'PCA', color: 'text-purple-400 bg-purple-500/10' },
-  pipeline: { label: '全流程', color: 'text-purple-400 bg-purple-500/10' },
+  descriptive: { label: '描述', color: 'text-accent-text bg-accent-light' },
+  frequency: { label: '频数', color: 'text-accent-text bg-accent-light' },
+  normality: { label: '正态', color: 'text-accent-text bg-accent-light' },
+  'grouped-stats': { label: '分组', color: 'text-accent-text bg-accent-light' },
+  'ttest-independent': { label: 't检', color: 'text-accent-text bg-accent-light' },
+  'ttest-paired': { label: 't检', color: 'text-accent-text bg-accent-light' },
+  'anova-oneway': { label: 'ANOVA', color: 'text-accent-text bg-accent-light' },
+  correlation: { label: '相关', color: 'text-accent-text bg-accent-light' },
+  'linear-regression': { label: '回归', color: 'text-accent-text bg-accent-light' },
+  'nonlinear-fit': { label: '拟合', color: 'text-accent-text bg-accent-light' },
+  rsm: { label: 'RSM', color: 'text-accent-text bg-accent-light' },
+  pca: { label: 'PCA', color: 'text-accent-text bg-accent-light' },
+  pipeline: { label: '全流程', color: 'text-accent-text bg-accent-light' },
 };
 
 function StatCard({ label, value, change, icon, delay = 0 }: {
@@ -35,11 +35,11 @@ function StatCard({ label, value, change, icon, delay = 0 }: {
     <div className="glass-card p-5 animate-fade-in" style={{ animationDelay: `${delay}ms`, opacity: 0 }}>
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
+          <p className="text-xs font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider">{label}</p>
           <p className="stat-value mt-1">{value}</p>
-          <p className="mt-1 text-xs text-emerald-400">{change}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">{change}</p>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-light text-accent-text">
           {icon}
         </div>
       </div>
@@ -108,28 +108,27 @@ export default function HomePage() {
   ];
 
   const quickActions = [
-    { label: '导入数据', desc: 'CSV / Excel / JSON', icon: <Upload className="h-4 w-4" />, path: '/import', color: 'bg-blue-500/10 text-blue-400' },
-    { label: '数据清洗', desc: '缺失值 / 异常值处理', icon: <Sparkles className="h-4 w-4" />, path: '/cleaning', color: 'bg-emerald-500/10 text-emerald-400' },
-    { label: '统计分析', desc: '13 种统计方法', icon: <BarChart3 className="h-4 w-4" />, path: '/analysis', color: 'bg-purple-500/10 text-purple-400' },
-    { label: '生成图表', desc: '12 种可视化类型', icon: <PieChart className="h-4 w-4" />, path: '/charts', color: 'bg-amber-500/10 text-amber-400' },
+    { label: '导入数据', desc: 'CSV / Excel / JSON', icon: <Upload className="h-4 w-4" />, path: '/import', color: 'bg-accent-light text-accent-text' },
+    { label: '数据清洗', desc: '缺失值 / 异常值处理', icon: <Sparkles className="h-4 w-4" />, path: '/cleaning', color: 'bg-accent-light text-accent-text' },
+    { label: '统计分析', desc: '13 种统计方法', icon: <BarChart3 className="h-4 w-4" />, path: '/analysis', color: 'bg-accent-light text-accent-text' },
+    { label: '生成图表', desc: '12 种可视化类型', icon: <PieChart className="h-4 w-4" />, path: '/charts', color: 'bg-accent-light text-accent-text' },
   ];
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Welcome */}
       <div className="glass-panel p-6 sm:p-8 mb-8 animate-fade-in relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-indigo-500/10 to-transparent rounded-full blur-2xl" />
         <div className="relative">
           <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-accent-light text-accent-text border border-accent-border">
               <Activity className="h-3 w-3" />
               工作台
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--color-text-primary)]">
             {currentDataset ? `正在分析: ${currentDataset.name}` : '欢迎使用实验数据分析工作台'}
           </h1>
-          <p className="mt-2 text-slate-400 max-w-xl">
+          <p className="mt-2 text-[var(--color-text-secondary)] max-w-xl">
             {currentDataset
               ? `数据集已加载，${currentDataset.rowCount} 行 × ${currentDataset.colCount} 列。继续分析或生成图表。`
               : 'WaveSight 已就绪。导入实验数据，开始清洗、分析与可视化。'}
@@ -158,11 +157,11 @@ export default function HomePage() {
       {currentDataset && (
         <div className="glass-card-static p-5 mb-8 animate-fade-in" style={{ animationDelay: '250ms', opacity: 0 }}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Database className="h-4 w-4 text-indigo-400" />
+            <h2 className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+              <Database className="h-4 w-4 text-accent-text" />
               数据预览
             </h2>
-            <button className="text-xs text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1"
+            <button className="text-xs text-accent-text hover:text-accent transition flex items-center gap-1"
               onClick={() => navigate('/import')}>
               管理数据 <ChevronRight className="h-3 w-3" />
             </button>
@@ -176,39 +175,39 @@ export default function HomePage() {
         {/* Recent activity */}
         <div className="lg:col-span-2 glass-card-static p-5 animate-fade-in" style={{ animationDelay: '400ms', opacity: 0 }}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Clock className="h-4 w-4 text-indigo-400" />
+            <h2 className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+              <Clock className="h-4 w-4 text-accent-text" />
               最近活动
             </h2>
-            <button className="text-xs text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1"
+            <button className="text-xs text-accent-text hover:text-accent transition flex items-center gap-1"
               onClick={() => navigate('/history')}>
               查看全部 <ChevronRight className="h-3 w-3" />
             </button>
           </div>
           <div className="space-y-0.5">
             {records.length === 0 && charts.length === 0 ? (
-              <p className="text-sm text-slate-500 py-4 text-center">暂无分析记录，去 <button className="text-indigo-400 hover:underline" onClick={() => navigate('/analysis')}>开始分析</button></p>
+              <p className="text-sm text-[var(--color-text-tertiary)] py-4 text-center">暂无分析记录，去 <button className="text-accent-text hover:underline" onClick={() => navigate('/analysis')}>开始分析</button></p>
             ) : (
               <>
                 {records.slice(0, 4).map((r) => {
-                  const cfg = ACTION_TYPE[r.analysisConfig.type ?? ''] ?? { label: r.analysisConfig.type ?? '分析', color: 'text-slate-400 bg-white/5' };
+                  const cfg = ACTION_TYPE[r.analysisConfig.type ?? ''] ?? { label: r.analysisConfig.type ?? '分析', color: 'text-[var(--color-text-secondary)] bg-[var(--color-bg-glass)]' };
                   return (
-                    <div key={r.id} className="flex items-center gap-3 py-2.5 px-3 rounded-xl transition hover:bg-white/[0.02] cursor-pointer" onClick={() => navigate('/history')}>
+                    <div key={r.id} className="flex items-center gap-3 py-2.5 px-3 rounded-xl transition hover:bg-[var(--color-accent-light)] cursor-pointer" onClick={() => navigate('/history')}>
                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-300 truncate">{r.datasetName}</p>
-                        <p className="text-xs text-slate-500 truncate">{r.result.conclusion.slice(0, 40) || new Date(r.createdAt).toLocaleString('zh-CN')}</p>
+                        <p className="text-sm text-[var(--color-text-primary)] truncate">{r.datasetName}</p>
+                        <p className="text-xs text-[var(--color-text-tertiary)] truncate">{r.result.conclusion.slice(0, 40) || new Date(r.createdAt).toLocaleString('zh-CN')}</p>
                       </div>
-                      <span className="text-xs text-slate-500">{new Date(r.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-xs text-[var(--color-text-tertiary)]">{new Date(r.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   );
                 })}
                 {charts.slice(0, 2).map((c) => (
-                  <div key={c.id} className="flex items-center gap-3 py-2.5 px-3 rounded-xl transition hover:bg-white/[0.02] cursor-pointer" onClick={() => navigate('/charts')}>
-                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-semibold text-amber-400 bg-amber-500/10">图表</span>
+                  <div key={c.id} className="flex items-center gap-3 py-2.5 px-3 rounded-xl transition hover:bg-[var(--color-accent-light)] cursor-pointer" onClick={() => navigate('/charts')}>
+                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-semibold text-accent-text bg-accent-light">图表</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-300 truncate">{c.title}</p>
-                      <p className="text-xs text-slate-500">{new Date(c.createdAt).toLocaleString('zh-CN')}</p>
+                      <p className="text-sm text-[var(--color-text-primary)] truncate">{c.title}</p>
+                      <p className="text-xs text-[var(--color-text-tertiary)]">{new Date(c.createdAt).toLocaleString('zh-CN')}</p>
                     </div>
                   </div>
                 ))}
@@ -219,19 +218,19 @@ export default function HomePage() {
 
         {/* Quick actions */}
         <div className="glass-card-static p-5 animate-fade-in" style={{ animationDelay: '500ms', opacity: 0 }}>
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2 mb-4">
-            <TrendingUp className="h-4 w-4 text-indigo-400" />
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-2 mb-4">
+            <TrendingUp className="h-4 w-4 text-accent-text" />
             快速操作
           </h2>
           <div className="space-y-2">
             {quickActions.map((action) => (
-              <button key={action.label} className="w-full flex items-center gap-3 p-3 rounded-xl transition hover:bg-white/[0.03] text-left group" onClick={() => navigate(action.path)}>
+              <button key={action.label} className="w-full flex items-center gap-3 p-3 rounded-xl transition hover:bg-[var(--color-accent-light)] text-left group" onClick={() => navigate(action.path)}>
                 <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${action.color}`}>{action.icon}</div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-300 group-hover:text-white transition">{action.label}</p>
-                  <p className="text-xs text-slate-500">{action.desc}</p>
+                  <p className="text-sm font-medium text-[var(--color-text-primary)] group-hover:text-accent-text transition">{action.label}</p>
+                  <p className="text-xs text-[var(--color-text-tertiary)]">{action.desc}</p>
                 </div>
-                <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-slate-400 transition" />
+                <ChevronRight className="h-4 w-4 text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-secondary)] transition" />
               </button>
             ))}
           </div>

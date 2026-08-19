@@ -11,13 +11,10 @@ export default function AppLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0a0a1a] text-slate-200">
-      {/* Background effects */}
+    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--color-text-primary)]">
+      {/* Background grid (subtle) */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -right-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-pink-500/5 rounded-full blur-3xl" />
-        <div className="absolute inset-0 bg-grid opacity-50" />
+        <div className="absolute inset-0 bg-grid opacity-40" />
       </div>
 
       {/* Desktop sidebar */}

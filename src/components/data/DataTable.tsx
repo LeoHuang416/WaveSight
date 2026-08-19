@@ -80,7 +80,7 @@ export default function DataTable({ dataset, highlightCells, maxRows, columnMenu
   }));
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
+    <div className="overflow-hidden rounded-xl border border-[var(--color-border-light)] bg-[var(--color-bg-glass)]">
       <Table
         columns={columns}
         dataSource={rows.map((row, i) => ({ ...row, _key: i }))}

@@ -4,6 +4,17 @@ export default {
   theme: {
     extend: {
       colors: {
+        accent: {
+          DEFAULT: 'var(--color-accent)',
+          hover: 'var(--color-accent-hover)',
+          text: 'var(--color-accent-text)',
+          light: 'var(--color-accent-light)',
+          border: 'var(--color-accent-border)',
+        },
+        surface: {
+          DEFAULT: 'var(--color-bg-app)',
+          card: 'var(--color-bg-card)',
+        },
         wavesight: {
           50: '#eef2ff',
           100: '#e0e7ff',

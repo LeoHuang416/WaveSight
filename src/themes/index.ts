@@ -40,44 +40,44 @@ export interface ThemeDefinition {
   antFontSize: number;
 }
 
-/* ────── Theme 1: macOS Glass ────── */
+/* ────── Theme 1: 素净 Minimal (default) ────── */
 const macosGlass: ThemeDefinition = {
   id: 'macos-glass',
-  label: 'macOS 毛玻璃',
-  description: '轻盈、通透、克制的 macOS 风格毛玻璃设计',
+  label: '素净 Minimal',
+  description: '简洁朴素：中性灰白 + 单一强调色，低干扰的专注工作台',
 
   light: {
-    bg: '#F7F9FC',
+    bg: '#F5F6F8',
     bgSecondary: '#FFFFFF',
-    textPrimary: '#333333',
-    textSecondary: '#888888',
-    textTertiary: '#b0b0b0',
-    border: '#eeeeee',
-    borderLight: '#f5f5f5',
-    accent: '#5B7F95',
-    accentHover: '#4A6B7F',
-    accentLight: 'rgba(91,127,149,0.08)',
+    textPrimary: '#2B2F36',
+    textSecondary: '#6B7280',
+    textTertiary: '#9CA3AF',
+    border: '#E5E7EB',
+    borderLight: '#F0F1F3',
+    accent: '#4F6B8A',
+    accentHover: '#3F5A77',
+    accentLight: 'rgba(79,107,138,0.1)',
   },
   dark: {
-    bg: '#1a1a1a',
-    bgSecondary: '#252525',
-    textPrimary: '#e0e0e0',
-    textSecondary: '#999999',
-    textTertiary: '#666666',
-    border: '#333333',
-    borderLight: '#2a2a2a',
+    bg: '#17181C',
+    bgSecondary: '#1E2024',
+    textPrimary: '#E5E7EB',
+    textSecondary: '#9CA3AF',
+    textTertiary: '#6B7280',
+    border: '#2E3036',
+    borderLight: '#26282D',
     accent: '#6B8FA5',
     accentHover: '#5B7F95',
-    accentLight: 'rgba(107,143,165,0.12)',
+    accentLight: 'rgba(107,143,165,0.16)',
   },
 
-  sidebarWidth: 240,
-  sidebarCollapsedWidth: 64,
+  sidebarWidth: 224,
+  sidebarCollapsedWidth: 56,
   topbarHeight: 56,
-  buttonRadius: 12,
+  buttonRadius: 8,
 
   hasGlass: true,
-  hasCardShadow: true,
+  hasCardShadow: false,
   hasCardRadius: true,
 
   fontMono: "'SF Mono', 'JetBrains Mono', 'Consolas', monospace",
@@ -227,10 +227,10 @@ export interface AccentPreset {
   color: string;
 }
 export const ACCENT_PRESETS: AccentPreset[] = [
-  { id: 'blue', label: '学术蓝', color: '#2563eb' },
-  { id: 'green', label: '生物绿', color: '#059669' },
-  { id: 'purple', label: '物理紫', color: '#7c3aed' },
-  { id: 'orange', label: '工程橙', color: '#d97706' },
+  { id: 'blue', label: '沉稳灰蓝', color: '#4F6B8A' },
+  { id: 'green', label: '低饱和绿', color: '#2F7D68' },
+  { id: 'purple', label: '低饱和紫', color: '#6B5BA8' },
+  { id: 'orange', label: '赭石橙', color: '#B07D3C' },
 ];
 export const DEFAULT_ACCENT = 'blue';
 

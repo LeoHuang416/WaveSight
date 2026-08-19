@@ -3,13 +3,79 @@
 @tailwind utilities;
 
 /* ============================================================
-   WaveSight 设计系统 — 深色玻璃拟态（自 site-template 迁移）
+   WaveSight 设计系统 — 简洁朴素主题（变量驱动）
+   颜色全部由 useTheme 注入 CSS 变量；此处仅提供浅/深两套兜底值。
    ============================================================ */
 
 @layer base {
   :root {
+    /* 浅色兜底（useTheme 注入前） */
+    --color-accent: #4f6b8a;
+    --color-accent-hover: #3f5a77;
+    --color-accent-text: #4f6b8a;
+    --color-accent-light: rgba(79, 107, 138, 0.1);
+    --color-accent-border: rgba(79, 107, 138, 0.3);
+    --color-text-primary: #2b2f36;
+    --color-text-secondary: #6b7280;
+    --color-text-tertiary: #9ca3af;
+    --color-border: #e5e7eb;
+    --color-border-light: #f0f1f3;
+    --bg-app: #f5f6f8;
+    --bg-secondary: #ffffff;
+    --bg-glass: rgba(255, 255, 255, 0.75);
+    --bg-glass-hover: rgba(255, 255, 255, 0.9);
+    --bg-card: rgba(255, 255, 255, 0.85);
+    --bg-sidebar: rgba(255, 255, 255, 0.8);
+    --bg-topbar: rgba(255, 255, 255, 0.8);
+    --glass-blur: blur(12px);
+    --glass-blur-light: blur(6px);
+    --border-thin: 1px solid #e5e7eb;
+    --border-subtle: 1px solid #f0f1f3;
+    --border-hover: 1px solid rgba(79, 107, 138, 0.2);
+    --shadow-card: none;
+    --shadow-elevated: none;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 12px;
+    --sidebar-width: 224px;
+    --sidebar-collapsed-width: 56px;
+    --topbar-height: 56px;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", Consolas, monospace;
+
+    color-scheme: light;
+    font-family: var(--font-sans);
+  }
+
+  :root[data-mode='dark'] {
     color-scheme: dark;
-    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  :root[data-mode='dark'] {
+    /* 深色兜底（深灰蓝，非纯黑） */
+    --color-accent-text: #8fb3cf;
+    --color-accent-light: rgba(107, 143, 165, 0.16);
+    --color-accent-border: rgba(107, 143, 165, 0.35);
+    --color-text-primary: #e5e7eb;
+    --color-text-secondary: #9ca3af;
+    --color-text-tertiary: #6b7280;
+    --color-border: #2e3036;
+    --color-border-light: #26282d;
+    --bg-app: #17181c;
+    --bg-secondary: #1e2024;
+    --bg-glass: rgba(30, 32, 36, 0.72);
+    --bg-glass-hover: rgba(38, 40, 45, 0.85);
+    --bg-card: rgba(30, 32, 36, 0.6);
+    --bg-sidebar: rgba(23, 24, 28, 0.82);
+    --bg-topbar: rgba(23, 24, 28, 0.85);
+    --glass-blur: blur(16px);
+    --glass-blur-light: blur(8px);
+    --border-thin: 1px solid #2e3036;
+    --border-subtle: 1px solid #26282d;
+    --border-hover: 1px solid rgba(107, 143, 165, 0.35);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-elevated: 0 6px 20px rgba(0, 0, 0, 0.3);
   }
 
   html {
@@ -19,8 +85,8 @@
   body {
     margin: 0;
     min-width: 320px;
-    background: #0a0a1a;
-    color: #e2e8f0;
+    background: var(--bg-app);
+    color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -34,57 +100,56 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.02);
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-border);
     border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--color-text-tertiary);
   }
 }
 
 @layer components {
-  .glass-card {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 1rem;
-    transition: all 0.3s ease;
+  .glass-card,
+  .glass-card-static,
+  .glass-panel {
+    background: var(--bg-glass);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--border-subtle);
+    box-shadow: var(--shadow-card);
   }
 
-  .glass-card:hover {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
-    border-color: rgba(255, 255, 255, 0.12);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  }
-
+  .glass-card,
   .glass-card-static {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 1rem;
+    border-radius: var(--radius-lg);
   }
 
   .glass-panel {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 1.5rem;
+    border-radius: var(--radius-xl);
+  }
+
+  .glass-card {
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .glass-card:hover {
+    background: var(--bg-glass-hover);
+    border-color: var(--border-hover);
+  }
+
+  .glass-card-static {
+    background: var(--bg-card);
   }
 
   .gradient-text {
-    background: linear-gradient(135deg, #818cf8, #c084fc, #f472b6);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--color-accent-text);
+    -webkit-text-fill-color: currentColor;
+    background: none;
   }
 
   .gradient-border {
@@ -95,9 +160,9 @@
     content: "";
     position: absolute;
     inset: 0;
-    border-radius: 1rem;
+    border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, rgba(129, 140, 248, 0.3), rgba(192, 132, 252, 0.3), rgba(244, 114, 182, 0.3));
+    background: var(--color-accent-light);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
@@ -112,25 +177,21 @@
     padding: 0.625rem 1.25rem;
     font-size: 0.875rem;
     font-weight: 500;
-    border-radius: 0.75rem;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: white;
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: #ffffff;
     border: none;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .btn-primary:hover {
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    background: var(--color-accent-hover);
   }
 
   .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
   }
 
   .btn-secondary {
@@ -141,17 +202,17 @@
     padding: 0.625rem 1.25rem;
     font-size: 0.875rem;
     font-weight: 500;
-    border-radius: 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
-    color: #e2e8f0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--color-text-primary);
+    border: var(--border-thin);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: var(--color-text-tertiary);
+    background: var(--bg-glass-hover);
   }
 
   .btn-secondary:disabled {
@@ -163,17 +224,17 @@
     width: 100%;
     padding: 0.625rem 1rem;
     font-size: 0.875rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.75rem;
-    color: #e2e8f0;
+    background: var(--bg-secondary);
+    border: var(--border-thin);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
     outline: none;
     transition: all 0.2s ease;
   }
 
   .input-field:focus {
-    border-color: rgba(129, 140, 248, 0.5);
-    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
   }
 
   .nav-link {
@@ -184,8 +245,8 @@
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
     font-weight: 500;
-    color: rgba(226, 232, 240, 0.6);
-    border-radius: 0.75rem;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md);
     transition: all 0.2s ease;
     text-decoration: none;
     cursor: pointer;
@@ -196,13 +257,13 @@
   }
 
   .nav-link:hover {
-    color: #e2e8f0;
-    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-primary);
+    background: var(--color-accent-light);
   }
 
   .nav-link.active {
-    color: #818cf8;
-    background: rgba(129, 140, 248, 0.1);
+    color: var(--color-accent-text);
+    background: var(--color-accent-light);
   }
 
   .nav-link.active::before {
@@ -213,23 +274,20 @@
     transform: translateY(-50%);
     width: 3px;
     height: 1.5rem;
-    background: linear-gradient(to bottom, #6366f1, #8b5cf6);
+    background: var(--color-accent);
     border-radius: 0 2px 2px 0;
   }
 
   .stat-value {
     font-size: 1.875rem;
     font-weight: 700;
-    background: linear-gradient(135deg, #818cf8, #c084fc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--color-accent-text);
   }
 
   .bg-grid {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      linear-gradient(var(--color-border-light) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-border-light) 1px, transparent 1px);
     background-size: 40px 40px;
   }
 
@@ -244,7 +302,7 @@
     left: -50%;
     width: 200%;
     height: 200%;
-    background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.03), transparent 60%);
+    background: radial-gradient(ellipse at center, var(--color-accent-light), transparent 60%);
     pointer-events: none;
   }
 
@@ -252,8 +310,8 @@
     padding: 0.5rem 1rem;
     font-size: 0.8125rem;
     font-weight: 500;
-    color: rgba(226, 232, 240, 0.5);
-    border-radius: 0.5rem;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
     transition: all 0.2s ease;
     cursor: pointer;
     border: none;
@@ -261,13 +319,13 @@
   }
 
   .tab-btn:hover {
-    color: #e2e8f0;
-    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-primary);
+    background: var(--color-accent-light);
   }
 
   .tab-btn.active {
-    color: #818cf8;
-    background: rgba(129, 140, 248, 0.1);
+    color: var(--color-accent-text);
+    background: var(--color-accent-light);
   }
 
   .tag {
@@ -277,8 +335,9 @@
     font-size: 0.75rem;
     font-weight: 500;
     border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.03);
+    border: var(--border-thin);
+    background: var(--bg-secondary);
+    color: var(--color-text-secondary);
   }
 }
 
@@ -301,26 +360,26 @@
 }
 
 /* ============================================================
-   Ant Design 深色微调 — 让 antd 控件融入深色玻璃设计
+   Ant Design 主题融入 — 表格等控件跟随主题变量
    ============================================================ */
 .ant-table {
   background: transparent !important;
-  color: #e2e8f0;
+  color: var(--color-text-primary);
 }
 .ant-table-thead > tr > th {
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: rgba(148, 163, 184, 0.9) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  background: var(--color-accent-light) !important;
+  color: var(--color-text-secondary) !important;
+  border-bottom: var(--border-thin) !important;
 }
 .ant-table-tbody > tr > td {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  border-bottom: var(--border-subtle) !important;
 }
 .ant-table-tbody > tr:hover > td {
-  background: rgba(255, 255, 255, 0.03) !important;
+  background: var(--color-accent-light) !important;
 }
 .ant-table-placeholder {
   background: transparent !important;
 }
 .ant-empty-description {
-  color: rgba(148, 163, 184, 0.8) !important;
+  color: var(--color-text-tertiary) !important;
 }

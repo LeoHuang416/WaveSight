@@ -18,7 +18,7 @@ function Section({ icon, iconColor, title, children }: {
     <div className="glass-card-static p-5 animate-fade-in">
       <div className="flex items-center gap-2.5 mb-5">
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${iconColor}`}>{icon}</div>
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
       </div>
       <div className="space-y-4">{children}</div>
     </div>
@@ -29,8 +29,8 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <p className="text-sm text-slate-300">{title}</p>
-        {desc && <p className="text-xs text-slate-500">{desc}</p>}
+        <p className="text-sm text-[var(--color-text-primary)]">{title}</p>
+        {desc && <p className="text-xs text-[var(--color-text-tertiary)]">{desc}</p>}
       </div>
       <div className="flex-shrink-0">{children}</div>
     </div>
@@ -85,7 +85,7 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         {/* Appearance */}
-        <Section icon={<Palette className="h-4 w-4" />} iconColor="bg-indigo-500/10 text-indigo-400" title="外观">
+        <Section icon={<Palette className="h-4 w-4" />} iconColor="bg-accent-light text-accent-text" title="外观">
           <Row title="主题模式" desc="深色玻璃为推荐外观">
             <div className="flex gap-1.5">
               {([
@@ -98,8 +98,8 @@ export default function SettingsPage() {
                   onClick={() => setAppearanceMode(t.key)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     appearanceMode === t.key
-                      ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
-                      : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:bg-white/[0.06]'
+                      ? 'bg-accent-light text-accent-text border border-accent-border'
+                      : 'bg-[var(--color-bg-glass)] text-[var(--color-text-secondary)] border border-[var(--color-border-light)] hover:bg-[var(--color-accent-light)]'
                   }`}
                 >{t.icon}{t.label}</button>
               ))}
@@ -113,7 +113,7 @@ export default function SettingsPage() {
                   title={p.label}
                   onClick={() => setAccentColor(p.id)}
                   className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all ${
-                    accentColor === p.id ? 'border-white/60 ring-2 ring-indigo-400/40' : 'border-white/10 hover:border-white/30'
+                    accentColor === p.id ? 'border-accent-border ring-2 ring-accent-border' : 'border-[var(--color-border)] hover:border-[var(--color-text-tertiary)]'
                   }`}
                   style={{ background: p.color }}
                 />
@@ -123,7 +123,7 @@ export default function SettingsPage() {
         </Section>
 
         {/* Analysis defaults */}
-        <Section icon={<Sigma className="h-4 w-4" />} iconColor="bg-purple-500/10 text-purple-400" title="分析默认值">
+        <Section icon={<Sigma className="h-4 w-4" />} iconColor="bg-accent-light text-accent-text" title="分析默认值">
           <Row title="显著性水平 α" desc="假设检验的判断阈值">
             <InputNumber min={0.001} max={0.1} step={0.01} value={alpha} onChange={(v) => setAlpha(v ?? 0.05)} style={{ width: 110 }} />
           </Row>
@@ -133,7 +133,7 @@ export default function SettingsPage() {
         </Section>
 
         {/* Chart defaults */}
-        <Section icon={<BarChart3 className="h-4 w-4" />} iconColor="bg-amber-500/10 text-amber-400" title="图表默认值">
+        <Section icon={<BarChart3 className="h-4 w-4" />} iconColor="bg-accent-light text-accent-text" title="图表默认值">
           <Row title="默认配色" desc="新建图表的配色方案">
             <Radio.Group value={defaultColorScheme} onChange={(e) => setDefaultColorScheme(e.target.value)}>
               <Radio value="grayscale">学术灰度</Radio>
@@ -146,7 +146,7 @@ export default function SettingsPage() {
         </Section>
 
         {/* History */}
-        <Section icon={<History className="h-4 w-4" />} iconColor="bg-emerald-500/10 text-emerald-400" title="历史记录">
+        <Section icon={<History className="h-4 w-4" />} iconColor="bg-accent-light text-accent-text" title="历史记录">
           <Row title="自动清理" desc="开启后按保留天数清理旧记录">
             <Switch checked={autoCleanHistory} onChange={setAutoCleanHistory} />
           </Row>
@@ -158,16 +158,16 @@ export default function SettingsPage() {
         </Section>
 
         {/* Data management */}
-        <Section icon={<Database className="h-4 w-4" />} iconColor="bg-blue-500/10 text-blue-400" title="数据管理">
+        <Section icon={<Database className="h-4 w-4" />} iconColor="bg-accent-light text-accent-text" title="数据管理">
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: '数据集', value: stats.datasetCount },
               { label: '图表', value: stats.chartCount },
               { label: '历史记录', value: stats.historyCount },
             ].map((s) => (
-              <div key={s.label} className="rounded-xl bg-white/[0.02] border border-white/5 p-4 text-center">
+              <div key={s.label} className="rounded-xl bg-[var(--color-bg-glass)] border-[var(--border-thin)] p-4 text-center">
                 <p className="stat-value text-2xl">{s.value}</p>
-                <p className="text-xs text-slate-500 mt-1">{s.label}</p>
+                <p className="text-xs text-[var(--color-text-tertiary)] mt-1">{s.label}</p>
               </div>
             ))}
           </div>
@@ -182,7 +182,7 @@ export default function SettingsPage() {
         </Section>
 
         {/* About */}
-        <Section icon={<Info className="h-4 w-4" />} iconColor="bg-slate-500/10 text-slate-400" title="关于">
+        <Section icon={<Info className="h-4 w-4" />} iconColor="bg-accent-light text-accent-text" title="关于">
           <Row title="WaveSight · 实验数据分析工作台 v1.0" desc="本地运行，数据仅在当前电脑浏览器存储，无需联网。" />
         </Section>
       </div>

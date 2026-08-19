@@ -252,7 +252,7 @@ export default function AnalysisPage() {
         .then(() => message.success('已复制到剪贴板')).catch(() => message.error('复制失败'));
     };
     return (
-      <div key={mod.key} className="border border-slate-700/40 rounded-lg p-3 bg-white/[0.02] mb-3">
+      <div key={mod.key} className="border border-[var(--color-border-light)] rounded-lg p-3 bg-[var(--bg-secondary)] mb-3">
         <div className="flex items-center justify-between gap-2 mb-2">
           <Text strong style={{ fontSize: 12 }}>{mod.label}</Text>
           <Space size={4}>
@@ -349,16 +349,16 @@ export default function AnalysisPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
       <PageHeader title="实验数据分析" description="多个数据集可并行分析，勾选 √ 控制输出内容">
-        <span className="tag text-indigo-300 border-indigo-500/20 bg-indigo-500/5">α = {alpha}</span>
+        <span className="tag text-accent-text border-accent-border bg-accent-light">α = {alpha}</span>
       </PageHeader>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: analysis menu */}
         <div className="lg:col-span-1 glass-card-static p-3 h-fit">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2">分析方法</h3>
+          <h3 className="text-xs font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider mb-3 px-2">分析方法</h3>
           {groups.map((g) => (
             <div key={g} className="mb-3">
-              <p className="text-[10px] font-medium text-slate-600 uppercase tracking-wider px-2 mb-1">{g}</p>
+              <p className="text-[10px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider px-2 mb-1">{g}</p>
               <div className="space-y-0.5">
                 {ANALYSES.filter((a) => a.group === g).map((a) => (
                   <button
@@ -366,8 +366,8 @@ export default function AnalysisPage() {
                     onClick={() => handleMethodClick(a.key)}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs transition-all ${
                       activeSession?.analysisType === a.key
-                        ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] border border-transparent'
+                        ? 'bg-accent-light text-accent-text border border-accent-border'
+                        : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-accent-light)] border border-transparent'
                     }`}
                   >{a.label}</button>
                 ))}
@@ -391,7 +391,7 @@ export default function AnalysisPage() {
                 const modules = s.results ? applyOutputFilter(s.analysisType, s.results, s.checkedOutputs, { modelName: s.modelName }) : [];
                 return (
                   <div key={s.id}
-                    className={`glass-card-static p-4 cursor-pointer transition-all ${isActive ? 'ring-1 ring-indigo-500/50' : 'hover:ring-1 hover:ring-slate-600'}`}
+                    className={`glass-card-static p-4 cursor-pointer transition-all ${isActive ? 'ring-1 ring-accent-border' : 'hover:ring-1 hover:ring-[var(--color-border)]'}`}
                     onClick={() => setActiveSessionId(s.id)}>
                     <div className="flex items-center justify-between gap-2 mb-2" onClick={(e) => e.stopPropagation()}>
                       <Space size={6}>
@@ -425,7 +425,7 @@ export default function AnalysisPage() {
         <div className="lg:col-span-1 space-y-4">
           <div className="glass-card-static p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">分析会话</h3>
+              <h3 className="text-xs font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider">分析会话</h3>
               <Button size="small" type="primary" ghost icon={<PlusOutlined />}
                 onClick={() => createSession(activeSession?.analysisType ?? null)}>添加分析</Button>
             </div>
@@ -437,7 +437,7 @@ export default function AnalysisPage() {
                 return (
                   <div key={s.id}
                     className={`flex items-center justify-between px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all ${
-                      s.id === activeSessionId ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20' : 'text-slate-400 hover:bg-white/[0.02] border border-transparent'
+                      s.id === activeSessionId ? 'bg-accent-light text-accent-text border border-accent-border' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-accent-light)] border border-transparent'
                     }`}
                     onClick={() => setActiveSessionId(s.id)}>
                     <span className="truncate">{def?.label} · {ds?.name ?? '无数据集'}</span>
@@ -451,7 +451,7 @@ export default function AnalysisPage() {
           {activeSession && activeDef && (
             <>
               <div className="glass-card-static p-4 max-h-[45vh] overflow-y-auto">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">变量配置</h3>
+                <h3 className="text-xs font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider mb-3">变量配置</h3>
                 <Space direction="vertical" size={8} style={{ width: '100%' }}>
                   <Space>
                     <Text style={{ fontSize: 12 }}>数据集:</Text>
@@ -500,7 +500,7 @@ export default function AnalysisPage() {
 
               <div className="glass-card-static p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">输出项 (√ 控制)</h3>
+                  <h3 className="text-xs font-semibold text-[var(--color-text-tertiary)] uppercase tracking-wider">输出项 (√ 控制)</h3>
                   <Space size={4}>
                     <Button size="small" onClick={() => updateSession(activeSession.id, { checkedOutputs: OUTPUT_MODULES[activeSession.analysisType]?.map((m) => m.key) ?? [] })}>全选</Button>
                     <Button size="small" onClick={() => updateSession(activeSession.id, { checkedOutputs: [] })}>清空</Button>

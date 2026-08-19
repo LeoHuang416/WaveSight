@@ -55,9 +55,14 @@ export function useTheme() {
     root.style.setProperty('--color-accent-hover', accentHover);
     root.style.setProperty('--color-accent-light', accentLight);
     root.style.setProperty('--color-accent-subtle', accentLight);
+    // 强调文字色：暗色模式亮化以保证对比度；边框色为半透明主色
+    root.style.setProperty('--color-accent-text', resolvedMode === 'dark' ? lightenHex(userAccent, 0.45) : userAccent);
+    root.style.setProperty('--color-accent-border', userAccent + '4d');
     root.style.setProperty('--color-text-primary', colors.textPrimary);
     root.style.setProperty('--color-text-secondary', colors.textSecondary);
     root.style.setProperty('--color-text-tertiary', colors.textTertiary);
+    root.style.setProperty('--color-border', colors.border);
+    root.style.setProperty('--color-border-light', colors.borderLight);
 
     // Backgrounds
     if (uiTheme === 'fluent-glass') {
@@ -75,11 +80,11 @@ export function useTheme() {
     } else if (t.hasGlass) {
       root.style.setProperty('--bg-app', `linear-gradient(135deg, ${colors.bg} 0%, ${colors.bgSecondary} 100%)`);
       root.style.setProperty('--bg-secondary', colors.bgSecondary);
-      root.style.setProperty('--bg-glass', `rgba(255,255,255,${resolvedMode === 'dark' ? '0.08' : '0.65'})`);
-      root.style.setProperty('--bg-glass-hover', `rgba(255,255,255,${resolvedMode === 'dark' ? '0.12' : '0.85'})`);
-      root.style.setProperty('--bg-card', `rgba(255,255,255,${resolvedMode === 'dark' ? '0.06' : '0.55'})`);
-      root.style.setProperty('--bg-sidebar', `rgba(255,255,255,${resolvedMode === 'dark' ? '0.04' : '0.4'})`);
-      root.style.setProperty('--bg-topbar', `rgba(255,255,255,${resolvedMode === 'dark' ? '0.07' : '0.55'})`);
+      root.style.setProperty('--bg-glass', resolvedMode === 'dark' ? 'rgba(30,32,36,0.75)' : 'rgba(255,255,255,0.65)');
+      root.style.setProperty('--bg-glass-hover', resolvedMode === 'dark' ? 'rgba(38,40,45,0.9)' : 'rgba(255,255,255,0.85)');
+      root.style.setProperty('--bg-card', resolvedMode === 'dark' ? 'rgba(30,32,36,0.65)' : 'rgba(255,255,255,0.6)');
+      root.style.setProperty('--bg-sidebar', resolvedMode === 'dark' ? 'rgba(23,24,28,0.85)' : 'rgba(255,255,255,0.75)');
+      root.style.setProperty('--bg-topbar', resolvedMode === 'dark' ? 'rgba(23,24,28,0.85)' : 'rgba(255,255,255,0.8)');
       root.style.setProperty('--glass-blur', 'blur(20px)');
       root.style.setProperty('--glass-blur-light', 'blur(10px)');
     } else {
@@ -131,6 +136,15 @@ export function useTheme() {
     root.style.setProperty('--table-font-size', `${FONT_SIZE_MAP[kimiFontSize]}px`);
     root.style.setProperty('--table-text-align', kimiDataAlign === 'left' ? 'left' : kimiDataAlign === 'decimal' ? 'right' : 'inherit');
   }, [uiTheme, resolvedMode, accentColor, kimiRowHeight, kimiFontSize, kimiDataAlign, edgeSidebarMode, edgeCompactMode, fluentGradient, fluentGlassStrength]);
+}
+
+/** 将 hex 颜色向白色混合指定比例（用于暗色模式下强调文字亮化） */
+function lightenHex(hex: string, ratio: number): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const mix = (v: number) => Math.round(v + (255 - v) * ratio);
+  const to2 = (v: number) => Math.min(255, Math.max(0, v)).toString(16).padStart(2, '0');
+  return `#${to2(mix(parseInt(m[1], 16)))}${to2(mix(parseInt(m[2], 16)))}${to2(mix(parseInt(m[3], 16)))}`;
 }
 
 const FLUENT_GRADIENTS: Record<string, Record<string, { start: string; end: string }>> = {
