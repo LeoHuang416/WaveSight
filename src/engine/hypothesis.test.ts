@@ -38,6 +38,11 @@ describe('runPairedTTest', () => {
     expect(r.table.rows).toHaveLength(2);
     expect(r.conclusion).toContain('配对');
   });
+  it('rejects identical paired columns', () => {
+    const r = runPairedTTest(rows, 'val', 'val');
+    expect(r.conclusion).toContain('错误');
+    expect(r.conclusion).toContain('配对列不能相同');
+  });
 });
 
 describe('runOneWayANOVA', () => {

@@ -52,6 +52,37 @@ export const OUTPUT_MODULES: Record<AnalysisType, OutputModuleDef[]> = {
     { key: 'm-box', label: '分组箱线图', charts: ['ANOVA'] },
     { key: 'm-conclusion', label: '检验结论', specials: ['conclusion'] },
   ],
+  'anova-multiway': [
+    { key: 'm-anova', label: '方差分析表 (Type I SS)', tables: ['多因素 ANOVA'] },
+    { key: 'm-means', label: '水平均值表', tables: ['水平均值'] },
+    { key: 'm-interaction', label: '交互均值表', tables: ['交互均值'] },
+    { key: 'm-box', label: '分组箱线图', charts: ['多因素 ANOVA'] },
+    { key: 'm-interaction-chart', label: '交互均值图', charts: ['交互均值图'] },
+    { key: 'm-conclusion', label: '检验结论', specials: ['conclusion'] },
+  ],
+  'mann-whitney': [
+    { key: 'm-stats', label: '组统计 (中位数/秩和)', tables: ['组统计（Mann-Whitney）'] },
+    { key: 'm-test', label: '检验结果表', tables: ['Mann-Whitney U 检验'] },
+    { key: 'm-box', label: '分组箱线图', charts: ['Mann-Whitney'] },
+    { key: 'm-conclusion', label: '检验结论', specials: ['conclusion'] },
+  ],
+  wilcoxon: [
+    { key: 'm-stats', label: '秩统计表', tables: ['秩统计（Wilcoxon）'] },
+    { key: 'm-test', label: '检验结果表', tables: ['Wilcoxon 符号秩检验'] },
+    { key: 'm-conclusion', label: '检验结论', specials: ['conclusion'] },
+  ],
+  'kruskal-wallis': [
+    { key: 'm-stats', label: '组秩统计表', tables: ['组秩统计（Kruskal-Wallis）'] },
+    { key: 'm-test', label: '检验结果表', tables: ['Kruskal-Wallis 检验'] },
+    { key: 'm-box', label: '分组箱线图', charts: ['Kruskal-Wallis'] },
+    { key: 'm-conclusion', label: '检验结论', specials: ['conclusion'] },
+  ],
+  'chi-square': [
+    { key: 'm-table', label: '频数表 (观察 vs 期望)', tables: ['列联表（观察频数）', '频数分布（观察 vs 期望）'] },
+    { key: 'm-test', label: '检验结果表', tables: ['卡方检验', '卡方拟合优度检验'] },
+    { key: 'm-bar', label: '频数对比条形图', charts: ['卡方检验', '卡方拟合优度'] },
+    { key: 'm-conclusion', label: '检验结论', specials: ['conclusion'] },
+  ],
   correlation: [
     { key: 'm-matrix', label: '相关系数矩阵 (含显著性)', tables: ['相关矩阵'] },
     { key: 'm-heatmap', label: '相关热力图', charts: ['相关矩阵'] },

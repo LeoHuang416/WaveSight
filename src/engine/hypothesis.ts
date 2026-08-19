@@ -34,6 +34,9 @@ export function runIndependentTTest(rows: Record<string, unknown>[], valueCol: s
 export function runPairedTTest(rows: Record<string, unknown>[], col1: string, col2: string, alpha = 0.05): {
   table: ResultTable; conclusion: string;
 } {
+  if (col1 === col2) {
+    return { table: { title: '配对 t 检验', headers: ['错误'], rows: [['配对列不能相同']] }, conclusion: '错误：配对列不能相同' };
+  }
   const merged = rows.map((r) => ({ a: Number(r[col1]), b: Number(r[col2]) })).filter((v) => !isNaN(v.a) && !isNaN(v.b));
   const diffs = merged.map((v) => v.a - v.b);
   const n = diffs.length;

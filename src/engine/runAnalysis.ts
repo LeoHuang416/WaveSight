@@ -5,10 +5,37 @@
 import { runDescriptive, runFrequency, runNormality, runGroupedStats } from './descriptive';
 import { runIndependentTTest, runPairedTTest, runOneWayANOVA, runTukeyHSD } from './hypothesis';
 import { runCorrelation, runLinearRegression, runNonlinearFit, runRSM, runPCA, type RSMResult } from './modeling';
+import { runMannWhitneyU, runWilcoxonSignedRank, runKruskalWallis } from './nonparametric';
+import { runChiSquareIndependence, runChiSquareGOF } from './chiSquare';
+import { runMultiwayANOVA } from './anovaMultiway';
 import { buildRsmCharts, buildRsmDiagnostics } from './rsmCharts';
 import { runMissingDiagnostic, runOutlierDetection, runStandardization } from './preprocessing';
 import { extractByGroup, variance } from './utils';
 import type { AnalysisType, ResultTable, ChartDataSource } from '@/types/analysis';
+
+/** 构建分组箱线图（ECharts 配置） */
+function makeBoxChart(valueCol: string, groupCol: string, rows: Record<string, unknown>[], title: string): ChartDataSource {
+  const groups = [...new Set(rows.map((row) => String(row[groupCol] ?? '')))].filter((g) => g !== '');
+  const boxData = groups.map((g) => {
+    const vals = rows.filter((row) => String(row[groupCol]) === g).map((row) => Number(row[valueCol])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
+    if (vals.length < 4) return [0, 0, 0, 0, 0];
+    const q1 = vals[Math.floor(vals.length * 0.25)], q2 = vals[Math.floor(vals.length * 0.5)], q3 = vals[Math.floor(vals.length * 0.75)];
+    const iqr = q3 - q1;
+    return [Math.max(vals[0], q1 - 1.5 * iqr), q1, q2, q3, Math.min(vals[vals.length - 1], q3 + 1.5 * iqr)];
+  });
+  return {
+    chartType: 'boxplot', title,
+    data: {
+      backgroundColor: '#fff',
+      title: { text: title, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+      tooltip: {},
+      grid: { left: 60, right: 30, top: 45, bottom: 45 },
+      xAxis: { type: 'category', data: groups, name: groupCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
+      yAxis: { type: 'value', name: valueCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
+      series: [{ type: 'boxplot', data: boxData, itemStyle: { borderColor: '#5470c6' } }],
+    },
+  };
+}
 
 export interface AnalysisInput {
   analysisType: AnalysisType;
@@ -79,28 +106,9 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResultData {
     case 'ttest-independent': {
       if (valueCols[0] && groupCol) {
         const r = runIndependentTTest(rows, valueCols[0], groupCol, alpha);
-        const groups = [...new Set(rows.map((row) => String(row[groupCol] ?? '')))].filter((g) => g !== '');
-        const boxData = groups.map((g) => {
-          const vals = rows.filter((row) => String(row[groupCol]) === g).map((row) => Number(row[valueCols[0]])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
-          if (vals.length < 4) return [0, 0, 0, 0, 0];
-          const q1 = vals[Math.floor(vals.length * 0.25)], q2 = vals[Math.floor(vals.length * 0.5)], q3 = vals[Math.floor(vals.length * 0.75)];
-          const iqr = q3 - q1;
-          return [Math.max(vals[0], q1 - 1.5 * iqr), q1, q2, q3, Math.min(vals[vals.length - 1], q3 + 1.5 * iqr)];
-        });
         result = {
           tables: [r.table], conclusion: r.conclusion,
-          chartData: [{
-            chartType: 'boxplot', title: `${valueCols[0]} 按 ${groupCol}`,
-            data: {
-              backgroundColor: '#fff',
-              title: { text: `${valueCols[0]} 按 ${groupCol}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
-              tooltip: {},
-              grid: { left: 60, right: 30, top: 45, bottom: 45 },
-              xAxis: { type: 'category', data: groups, name: groupCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
-              yAxis: { type: 'value', name: valueCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
-              series: [{ type: 'boxplot', data: boxData, itemStyle: { borderColor: '#5470c6' } }],
-            },
-          }],
+          chartData: [makeBoxChart(valueCols[0], groupCol, rows, `${valueCols[0]} 按 ${groupCol}`)],
         };
       }
       break;
@@ -116,29 +124,131 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResultData {
       if (valueCols[0] && groupCol) {
         const r = runOneWayANOVA(rows, valueCols[0], groupCol, alpha);
         const tukey = runTukeyHSD(rows, valueCols[0], groupCol, alpha);
-        const groups = [...new Set(rows.map((row) => String(row[groupCol] ?? '')))].filter((g) => g !== '');
-        const boxData = groups.map((g) => {
-          const vals = rows.filter((row) => String(row[groupCol]) === g).map((row) => Number(row[valueCols[0]])).filter((v) => !isNaN(v)).sort((a, b) => a - b);
-          if (vals.length < 4) return [0, 0, 0, 0, 0];
-          const q1 = vals[Math.floor(vals.length * 0.25)], q2 = vals[Math.floor(vals.length * 0.5)], q3 = vals[Math.floor(vals.length * 0.75)];
-          const iqr = q3 - q1;
-          return [Math.max(vals[0], q1 - 1.5 * iqr), q1, q2, q3, Math.min(vals[vals.length - 1], q3 + 1.5 * iqr)];
-        });
         result = {
           tables: [r.table, tukey], conclusion: r.conclusion,
-          chartData: [{
-            chartType: 'boxplot', title: `ANOVA: ${valueCols[0]}`,
+          chartData: [makeBoxChart(valueCols[0], groupCol, rows, `ANOVA: ${valueCols[0]}`)],
+        };
+      }
+      break;
+    }
+    case 'anova-multiway': {
+      if (factorCols.length >= 2 && responseCol) {
+        const r = runMultiwayANOVA(rows, responseCol, factorCols, alpha);
+        const tables = [r.anovaTable, r.meansTable];
+        if (r.interactionTable) tables.push(r.interactionTable);
+        const chartData: ChartDataSource[] = [
+          makeBoxChart(responseCol, factorCols[0], rows, `多因素 ANOVA: ${responseCol} 按 ${factorCols[0]}`),
+        ];
+        // 两因素时补交互均值折线图
+        if (factorCols.length === 2) {
+          const lvA = [...new Set(rows.map((row) => String(row[factorCols[0]]).trim()))].filter(Boolean).sort((x, y) => x.localeCompare(y, 'zh'));
+          const lvB = [...new Set(rows.map((row) => String(row[factorCols[1]]).trim()))].filter(Boolean).sort((x, y) => x.localeCompare(y, 'zh'));
+          const lines = lvB.map((b) => ({
+            name: b,
+            type: 'line' as const,
+            symbolSize: 5,
+            data: lvA.map((a) => {
+              const vals = rows.filter((row) => String(row[factorCols[0]]).trim() === a && String(row[factorCols[1]]).trim() === b)
+                .map((row) => Number(row[responseCol])).filter((v) => !isNaN(v));
+              return [a, +(vals.reduce((s, v) => s + v, 0) / Math.max(vals.length, 1)).toFixed(4)];
+            }),
+          }));
+          chartData.push({
+            chartType: 'line', title: `交互均值图：${factorCols[0]} × ${factorCols[1]}`,
             data: {
               backgroundColor: '#fff',
-              title: { text: `ANOVA: ${valueCols[0]}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+              title: { text: `交互均值图：${factorCols[0]} × ${factorCols[1]}`, left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
               tooltip: {},
-              grid: { left: 60, right: 30, top: 45, bottom: 45 },
-              xAxis: { type: 'category', data: groups, name: groupCol, nameTextStyle: { fontFamily: 'Times New Roman' } },
-              yAxis: { type: 'value', name: valueCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
-              series: [{ type: 'boxplot', data: boxData, itemStyle: { borderColor: '#5470c6' } }],
+              legend: { bottom: 5 },
+              grid: { left: 60, right: 30, top: 45, bottom: 55 },
+              xAxis: { type: 'category', data: lvA.map((a) => a), name: factorCols[0], nameTextStyle: { fontFamily: 'Times New Roman' } },
+              yAxis: { type: 'value', name: `${responseCol} 均值`, nameTextStyle: { fontFamily: 'Times New Roman' } },
+              series: lines,
             },
-          }],
+          });
+        }
+        result = { tables, conclusion: r.conclusion, chartData };
+      }
+      break;
+    }
+    case 'mann-whitney': {
+      if (valueCols[0] && groupCol) {
+        const r = runMannWhitneyU(rows, valueCols[0], groupCol, alpha);
+        result = {
+          tables: [r.statTable, r.testTable], conclusion: r.conclusion,
+          chartData: [makeBoxChart(valueCols[0], groupCol, rows, `Mann-Whitney: ${valueCols[0]} 按 ${groupCol}`)],
         };
+      }
+      break;
+    }
+    case 'wilcoxon': {
+      if (pairedCol1 && pairedCol2) {
+        const r = runWilcoxonSignedRank(rows, pairedCol1, pairedCol2, alpha);
+        result = { tables: [r.statTable, r.testTable], conclusion: r.conclusion };
+      }
+      break;
+    }
+    case 'kruskal-wallis': {
+      if (valueCols[0] && groupCol) {
+        const r = runKruskalWallis(rows, valueCols[0], groupCol, alpha);
+        result = {
+          tables: [r.statTable, r.testTable], conclusion: r.conclusion,
+          chartData: [makeBoxChart(valueCols[0], groupCol, rows, `Kruskal-Wallis: ${valueCols[0]} 按 ${groupCol}`)],
+        };
+      }
+      break;
+    }
+    case 'chi-square': {
+      if (valueCols[0]) {
+        if (valueCols[1]) {
+          // 独立性检验（两分类列）
+          const r = runChiSquareIndependence(rows, valueCols[0], valueCols[1], alpha);
+          const cats = r.table.rows.slice(0, -1).map((row) => String(row[0]));
+          const catNames = r.table.headers.slice(1, -1);
+          const obs = r.table.rows.slice(0, -1).map((row) => row.slice(1, -1).map((v) => Number(v)));
+          const exp = r.expected;
+          const barData = cats.flatMap((c, i) => catNames.map((cn, j) => ({ name: `${c} × ${cn}`, obs: obs[i][j], exp: exp[i][j] })));
+          const chartData: ChartDataSource = {
+            chartType: 'bar', title: '卡方检验：观察 vs 期望频数',
+            data: {
+              backgroundColor: '#fff',
+              title: { text: '卡方检验：观察 vs 期望频数', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+              tooltip: {},
+              legend: { bottom: 5 },
+              grid: { left: 60, right: 30, top: 45, bottom: 80 },
+              xAxis: { type: 'category', data: barData.map((d) => d.name), axisLabel: { rotate: 45, fontSize: 9 } },
+              yAxis: { type: 'value', name: '频数', nameTextStyle: { fontFamily: 'Times New Roman' } },
+              series: [
+                { name: '观察', type: 'bar', data: barData.map((d) => d.obs), itemStyle: { color: '#5470c6' } },
+                { name: '期望', type: 'bar', data: barData.map((d) => d.exp), itemStyle: { color: '#91cc75' } },
+              ],
+            },
+          };
+          result = { tables: [r.table, r.testTable], conclusion: r.conclusion, chartData: [chartData] };
+        } else {
+          // 拟合优度检验（单分类列，均匀期望）
+          const r = runChiSquareGOF(rows, valueCols[0], undefined, alpha);
+          const catNames = r.table.rows.map((row) => String(row[0]));
+          const obs = r.table.rows.map((row) => Number(row[1]));
+          const exp = r.table.rows.map((row) => Number(row[2]));
+          const chartData: ChartDataSource = {
+            chartType: 'bar', title: '卡方拟合优度：观察 vs 期望频数',
+            data: {
+              backgroundColor: '#fff',
+              title: { text: '卡方拟合优度：观察 vs 期望频数', left: 'center', top: 5, textStyle: { color: '#000', fontSize: 14, fontFamily: 'Times New Roman' } },
+              tooltip: {},
+              legend: { bottom: 5 },
+              grid: { left: 60, right: 30, top: 45, bottom: 45 },
+              xAxis: { type: 'category', data: catNames },
+              yAxis: { type: 'value', name: '频数', nameTextStyle: { fontFamily: 'Times New Roman' } },
+              series: [
+                { name: '观察', type: 'bar', data: obs, itemStyle: { color: '#5470c6' } },
+                { name: '期望', type: 'bar', data: exp, itemStyle: { color: '#91cc75' } },
+              ],
+            },
+          };
+          result = { tables: [r.table, r.testTable], conclusion: r.conclusion, chartData: [chartData] };
+        }
       }
       break;
     }

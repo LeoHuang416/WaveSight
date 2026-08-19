@@ -6,6 +6,11 @@ export type AnalysisType =
   | 'ttest-independent'
   | 'ttest-paired'
   | 'anova-oneway'
+  | 'anova-multiway'
+  | 'mann-whitney'
+  | 'wilcoxon'
+  | 'kruskal-wallis'
+  | 'chi-square'
   | 'correlation'
   | 'linear-regression'
   | 'nonlinear-fit'
@@ -26,6 +31,7 @@ export interface AnalysisConfig {
   modelName?: string;
   pairedCol1?: string;
   pairedCol2?: string;
+  expected?: Record<string, number>;
   alpha?: number;
 }
 

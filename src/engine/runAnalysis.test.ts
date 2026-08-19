@@ -119,4 +119,61 @@ describe('computeAnalysis', () => {
     expect(r.tables).toHaveLength(1);
     expect(r.conclusion).toBeTruthy();
   });
+
+  it('mann-whitney: stat + test tables and boxplot', () => {
+    const r = computeAnalysis(base({ analysisType: 'mann-whitney', valueCols: ['x'], groupCol: 'g' }));
+    expect(r.tables.map((t) => t.title)).toEqual(['组统计（Mann-Whitney）', 'Mann-Whitney U 检验']);
+    expect(r.conclusion).toContain('Mann-Whitney');
+    expect(r.chartData![0].chartType).toBe('boxplot');
+  });
+
+  it('wilcoxon: rank stat + test tables', () => {
+    const r = computeAnalysis(base({ analysisType: 'wilcoxon', pairedCol1: 'x', pairedCol2: 'y' }));
+    expect(r.tables.map((t) => t.title)).toEqual(['秩统计（Wilcoxon）', 'Wilcoxon 符号秩检验']);
+    expect(r.conclusion).toContain('Wilcoxon');
+  });
+
+  it('kruskal-wallis: rank stat + test tables and boxplot', () => {
+    const r = computeAnalysis(base({ analysisType: 'kruskal-wallis', valueCols: ['x'], groupCol: 'g' }));
+    expect(r.tables.map((t) => t.title)).toEqual(['组秩统计（Kruskal-Wallis）', 'Kruskal-Wallis 检验']);
+    expect(r.conclusion).toContain('Kruskal-Wallis');
+    expect(r.chartData).toHaveLength(1);
+  });
+
+  it('chi-square independence: two categorical columns → contingency + test + bar chart', () => {
+    const rows = [
+      { a: 'X', b: 'M' }, { a: 'X', b: 'M' }, { a: 'X', b: 'N' },
+      { a: 'Y', b: 'M' }, { a: 'Y', b: 'N' }, { a: 'Y', b: 'N' },
+    ];
+    const r = computeAnalysis(base({ analysisType: 'chi-square', rows, valueCols: ['a', 'b'] }));
+    expect(r.tables[0].title).toContain('列联表');
+    expect(r.tables[1].title).toContain('卡方检验');
+    expect(r.conclusion).toContain('卡方检验');
+    expect(r.chartData![0].title).toContain('观察 vs 期望');
+  });
+
+  it('chi-square GOF: single column → uniform expectation + bar chart', () => {
+    const rows = [
+      { c: 'A' }, { c: 'A' }, { c: 'A' }, { c: 'A' }, { c: 'A' },
+      { c: 'B' }, { c: 'B' }, { c: 'B' }, { c: 'B' }, { c: 'B' },
+    ];
+    const r = computeAnalysis(base({ analysisType: 'chi-square', rows, valueCols: ['c'] }));
+    expect(r.tables[0].title).toContain('频数分布');
+    expect(r.tables[1].title).toContain('拟合优度');
+    expect(r.chartData![0].title).toContain('拟合优度');
+  });
+
+  it('anova-multiway: ANOVA + means + interaction tables and charts', () => {
+    const rows = [
+      { a: 'a1', b: 'b1', y: 1 }, { a: 'a1', b: 'b1', y: 3 },
+      { a: 'a1', b: 'b2', y: 3 }, { a: 'a1', b: 'b2', y: 5 },
+      { a: 'a2', b: 'b1', y: 11 }, { a: 'a2', b: 'b1', y: 13 },
+      { a: 'a2', b: 'b2', y: 13 }, { a: 'a2', b: 'b2', y: 15 },
+    ];
+    const r = computeAnalysis(base({ analysisType: 'anova-multiway', rows, factorCols: ['a', 'b'], responseCol: 'y' }));
+    expect(r.tables.map((t) => t.title)).toEqual(['多因素 ANOVA', '水平均值', '交互均值（两因素）']);
+    expect(r.conclusion).toContain('多因素 ANOVA');
+    expect(r.chartData!.map((c) => c.chartType)).toEqual(['boxplot', 'line']);
+    expect(r.chartData![1].title).toContain('交互均值图');
+  });
 });

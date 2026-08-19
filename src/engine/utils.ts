@@ -108,6 +108,59 @@ export function extractByGroup(rows: Record<string, unknown>[], valueCol: string
   return groups;
 }
 
+/** Standard normal CDF (Φ) via Abramowitz-Stegun erf approximation */
+export function normalCdf(z: number): number {
+  if (!isFinite(z)) return z > 0 ? 1 : 0;
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+  const erf = sign * (1 - poly * Math.exp(-x * x));
+  return 0.5 * (1 + erf);
+}
+
+/** Chi-square distribution CDF (lower regularized incomplete gamma) */
+export function chiSquareCdf(x: number, df: number): number {
+  if (x <= 0) return 0;
+  if (!isFinite(x)) return 1;
+  return lowerRegularizedGamma(df / 2, x / 2);
+}
+
+function lowerRegularizedGamma(a: number, x: number): number {
+  if (x < 0 || a <= 0) return NaN;
+  if (x === 0) return 0;
+  const gln = lnGamma(a);
+  if (x < a + 1) {
+    let ap = a;
+    let sum = 1 / a;
+    let term = 1 / a;
+    for (let n = 1; n < 200; n++) {
+      ap += 1;
+      term *= x / ap;
+      sum += term;
+      if (Math.abs(term) < Math.abs(sum) * 1e-12) break;
+    }
+    return sum * Math.exp(-x + a * Math.log(x) - gln);
+  }
+  const b = x + 1 - a;
+  let c = 1e30;
+  let d = 1 / b;
+  let h = d;
+  for (let i = 1; i < 200; i++) {
+    const an = -i * (i - a);
+    let b2 = b + 2 * i;
+    d = an * d + b2;
+    if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = b2 + an / c;
+    if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 1e-12) break;
+  }
+  return 1 - Math.exp(-x + a * Math.log(x) - gln) * h;
+}
+
 /** t-distribution p-value (two-tailed) */
 export function tTestPValue(t: number, df: number): number {
   const x = df / (df + t * t);

@@ -13,6 +13,8 @@ import type { AnalysisType } from '@/types/analysis';
 const TYPE_LABELS: Record<AnalysisType, string> = {
   descriptive: '描述统计', frequency: '频数统计', normality: '正态性检验', 'grouped-stats': '分组统计',
   'ttest-independent': '独立样本 t 检验', 'ttest-paired': '配对 t 检验', 'anova-oneway': '单因素 ANOVA',
+  'anova-multiway': '多因素 ANOVA', 'mann-whitney': 'Mann-Whitney U 检验', wilcoxon: 'Wilcoxon 符号秩检验',
+  'kruskal-wallis': 'Kruskal-Wallis 检验', 'chi-square': '卡方检验',
   correlation: '相关矩阵', 'linear-regression': '线性回归', 'nonlinear-fit': '非线性拟合',
   rsm: '响应面分析', pca: '主成分分析', pipeline: '全流程分析',
 };
@@ -21,9 +23,12 @@ const TYPE_COLORS: Record<AnalysisType, string> = {
   descriptive: 'text-accent-text bg-accent-light', frequency: 'text-accent-text bg-accent-light',
   normality: 'text-accent-text bg-accent-light', 'grouped-stats': 'text-accent-text bg-accent-light',
   'ttest-independent': 'text-accent-text bg-accent-light', 'ttest-paired': 'text-accent-text bg-accent-light',
-  'anova-oneway': 'text-accent-text bg-accent-light', correlation: 'text-accent-text bg-accent-light',
-  'linear-regression': 'text-accent-text bg-accent-light', 'nonlinear-fit': 'text-accent-text bg-accent-light',
-  rsm: 'text-accent-text bg-accent-light', pca: 'text-accent-text bg-accent-light', pipeline: 'text-accent-text bg-accent-light',
+  'anova-oneway': 'text-accent-text bg-accent-light', 'anova-multiway': 'text-accent-text bg-accent-light',
+  'mann-whitney': 'text-accent-text bg-accent-light', wilcoxon: 'text-accent-text bg-accent-light',
+  'kruskal-wallis': 'text-accent-text bg-accent-light', 'chi-square': 'text-accent-text bg-accent-light',
+  correlation: 'text-accent-text bg-accent-light', 'linear-regression': 'text-accent-text bg-accent-light',
+  'nonlinear-fit': 'text-accent-text bg-accent-light', rsm: 'text-accent-text bg-accent-light',
+  pca: 'text-accent-text bg-accent-light', pipeline: 'text-accent-text bg-accent-light',
 };
 
 function ResultTable({ title, headers, rows }: { title: string; headers: string[]; rows: (string | number)[][] }) {

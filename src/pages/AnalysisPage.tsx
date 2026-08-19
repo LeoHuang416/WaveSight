@@ -26,7 +26,7 @@ interface AnalysisDef {
   key: AnalysisType;
   label: string;
   group: string;
-  needs: { valueCols?: 'multi' | 'single'; groupCol?: boolean; xCols?: 'multi' | 'single'; yCol?: boolean; factorCols?: '2-3'; responseCol?: boolean; paired?: boolean; method?: boolean; model?: boolean; pipeline?: boolean };
+  needs: { valueCols?: 'multi' | 'single'; groupCol?: boolean; xCols?: 'multi' | 'single'; yCol?: boolean; factorCols?: '2-3'; responseCol?: boolean; paired?: boolean; method?: boolean; model?: boolean; pipeline?: boolean; twoCats?: boolean };
 }
 
 const ANALYSES: AnalysisDef[] = [
@@ -37,6 +37,11 @@ const ANALYSES: AnalysisDef[] = [
   { key: 'ttest-independent', label: '独立样本 t 检验', group: '假设检验', needs: { valueCols: 'single', groupCol: true } },
   { key: 'ttest-paired', label: '配对 t 检验', group: '假设检验', needs: { paired: true } },
   { key: 'anova-oneway', label: '单因素 ANOVA', group: '假设检验', needs: { valueCols: 'single', groupCol: true } },
+  { key: 'anova-multiway', label: '多因素 ANOVA', group: '假设检验', needs: { responseCol: true, factorCols: '2-3' } },
+  { key: 'mann-whitney', label: 'Mann-Whitney U 检验', group: '假设检验', needs: { valueCols: 'single', groupCol: true } },
+  { key: 'wilcoxon', label: 'Wilcoxon 符号秩检验', group: '假设检验', needs: { paired: true } },
+  { key: 'kruskal-wallis', label: 'Kruskal-Wallis 检验', group: '假设检验', needs: { valueCols: 'single', groupCol: true } },
+  { key: 'chi-square', label: '卡方检验', group: '假设检验', needs: { twoCats: true } },
   { key: 'correlation', label: '相关矩阵', group: '建模', needs: { valueCols: 'multi', method: true } },
   { key: 'linear-regression', label: '线性回归 (OLS)', group: '建模', needs: { xCols: 'multi', yCol: true } },
   { key: 'nonlinear-fit', label: '非线性拟合', group: '建模', needs: { xCols: 'single', yCol: true, model: true } },
@@ -473,11 +478,15 @@ export default function AnalysisPage() {
                         {activeDef.needs.groupCol && renderSlot('分组列', 'single', activeSession.groupCol, (v) => updateSession(activeSession.id, { groupCol: v as string | undefined }), catCols)}
                         {activeDef.needs.xCols && renderSlot('自变量 X', activeDef.needs.xCols, activeSession.xCols, (v) => updateSession(activeSession.id, { xCols: Array.isArray(v) ? v : v ? [v] : [] }), numericCols)}
                         {activeDef.needs.yCol && renderSlot('因变量 Y', 'single', activeSession.yCol, (v) => updateSession(activeSession.id, { yCol: v as string | undefined }), numericCols)}
-                        {activeDef.needs.factorCols && renderSlot('因素列(2-3个)', 'multi', activeSession.factorCols, (v) => updateSession(activeSession.id, { factorCols: Array.isArray(v) ? v : [] }), numericCols)}
+                        {activeDef.needs.factorCols && renderSlot('因素列(2-3个)', 'multi', activeSession.factorCols, (v) => updateSession(activeSession.id, { factorCols: Array.isArray(v) ? v : [] }), activeDef.key === 'anova-multiway' ? catCols : numericCols)}
                         {activeDef.needs.responseCol && renderSlot('响应列', 'single', activeSession.responseCol, (v) => updateSession(activeSession.id, { responseCol: v as string | undefined }), numericCols)}
+                        {activeDef.needs.twoCats && (<>
+                          {renderSlot('行变量（分类）', 'single', activeSession.valueCols[0], (v) => updateSession(activeSession.id, { valueCols: [v as string, activeSession.valueCols[1]] }), catCols)}
+                          {renderSlot('列变量（可选，留空=拟合优度检验）', 'single', activeSession.valueCols[1], (v) => updateSession(activeSession.id, { valueCols: [activeSession.valueCols[0], v as string] }), catCols)}
+                        </>)}
                         {activeDef.needs.paired && (<>
                           {renderSlot('配对列1', 'single', activeSession.pairedCol1, (v) => updateSession(activeSession.id, { pairedCol1: v as string | undefined }), numericCols)}
-                          {renderSlot('配对列2', 'single', activeSession.pairedCol2, (v) => updateSession(activeSession.id, { pairedCol2: v as string | undefined }), numericCols)}
+                          {renderSlot('配对列2', 'single', activeSession.pairedCol2, (v) => updateSession(activeSession.id, { pairedCol2: v as string | undefined }), numericCols.filter((c) => c !== activeSession.pairedCol1))}
                         </>)}
                         {activeDef.needs.method && <Space><Text style={{ fontSize: 12 }}>方法:</Text><Select size="small" style={{ width: 120 }} value={activeSession.corrMethod} onChange={(v) => updateSession(activeSession.id, { corrMethod: v })} options={[{ label: 'Pearson', value: 'pearson' }, { label: 'Spearman', value: 'spearman' }, { label: 'Kendall', value: 'kendall' }]} /></Space>}
                         {activeDef.needs.model && <Space><Text style={{ fontSize: 12 }}>模型:</Text><Select size="small" style={{ width: 120 }} value={activeSession.modelName} onChange={(v) => updateSession(activeSession.id, { modelName: v })} options={[{ label: '指数', value: 'exp' }, { label: '幂函数', value: 'power' }, { label: 'Gaussian', value: 'gauss' }, { label: '线性', value: 'linear' }]} /></Space>}
