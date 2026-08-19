@@ -22,6 +22,8 @@ export interface ChartConfig {
   yAxisLabel: string;
   yAxisMin?: number;
   yAxisMax?: number;
+  animationDuration?: number;
+  animationEasing?: string;
   sourceAnalysisId?: string;
   createdAt: number;
 }

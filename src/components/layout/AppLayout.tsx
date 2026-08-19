@@ -1,14 +1,34 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import Sidebar, { MobileHeader } from './Sidebar';
+import ShortcutHelp from '@/components/common/ShortcutHelp';
+import { useHotkeys } from '@/hooks/useHotkeys';
+
+const NAV = [
+  { href: '/', label: '总览' },
+  { href: '/import', label: '导入' },
+  { href: '/cleaning', label: '清洗' },
+  { href: '/analysis', label: '分析' },
+  { href: '/charts', label: '图表' },
+  { href: '/history', label: '历史' },
+  { href: '/settings', label: '设置' },
+];
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const navigate = useNavigate();
 
   // React-router HashRouter: jump to top on navigation
   useEffect(() => {
     if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
   }, []);
+
+  useHotkeys([
+    ...NAV.map((item, i) => ({ combo: `alt+${i + 1}`, callback: () => navigate(item.href) })),
+    { combo: 'shift+/', callback: () => setHelpOpen(true) },
+    { combo: '/', callback: () => setHelpOpen(true) },
+  ]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-app)] text-[var(--color-text-primary)]">
@@ -35,6 +55,8 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </main>
+
+      <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Card, Button, Input, Select, Space, Typography, Empty, Popconfirm, message, Radio, InputNumber } from 'antd';
-import { PlusOutlined, DeleteOutlined, DownloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, DownloadOutlined, ArrowLeftOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
 import PageHeader from '@/components/layout/PageHeader';
 import { useChartStore } from '@/stores/useChartStore';
 import { useDataStore } from '@/stores/useDataStore';
-import { exportPNG, exportSVG, exportCSV } from '@/utils/export';
+import { exportPNG, exportSVG, exportCSV, exportXLSX } from '@/utils/export';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { generateId, formatNumber } from '@/utils/format';
 import { buildContourOption } from '@/engine/rsmCharts';
 import type { ChartConfig, ChartType, ColorScheme, LegendPosition } from '@/types/chart';
@@ -23,8 +24,8 @@ const CHART_LABELS: Record<ChartType, string> = {
 const GRAY = ['#1a1a1a', '#4d4d4d', '#808080', '#b3b3b3', '#d9d9d9', '#f0f0f0'];
 const COLOR = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
 
-/** 把编辑器配置（轴标签/轴范围/图例位置/字号）合并进任意 ECharts option */
-function applyEditor(option: Record<string, unknown> | undefined, c: ChartConfig): Record<string, unknown> {
+/** 把编辑器配置（轴标签/轴范围/图例位置/字号/动画）合并进任意 ECharts option */
+export function applyEditor(option: Record<string, unknown> | undefined, c: ChartConfig): Record<string, unknown> {
   if (!option || typeof option !== 'object') return option ?? {};
   const out = { ...option };
   if (c.fontSize && out.title && typeof out.title === 'object') {
@@ -57,6 +58,9 @@ function applyEditor(option: Record<string, unknown> | undefined, c: ChartConfig
       : { right: 5 };
     out.legend = { ...((out.legend as Record<string, unknown>) ?? {}), ...pos };
   }
+  // 动画/过渡效果（动画时长 + 缓动，V2）
+  if (c.animationDuration !== undefined) out.animationDuration = c.animationDuration;
+  if (c.animationEasing) out.animationEasing = c.animationEasing;
   return out;
 }
 
@@ -487,6 +491,12 @@ export default function ChartsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ChartType | 'all'>('all');
   const [echartsRef, setEchartsRef] = useState<ReactECharts | null>(null);
+
+  const editingChart = charts.find((c) => c.id === editingChartId) ?? null;
+  useHotkeys([
+    { combo: 'ctrl+s', callback: () => { if (echartsRef && editingChart) exportPNG(echartsRef.getEchartsInstance(), editingChart.title); } },
+    { combo: 'ctrl+e', callback: () => { if (currentDataset && editingChart) exportXLSX(currentDataset.columns.map((c) => c.name), currentDataset.rows.map((r) => currentDataset.columns.map((c) => typeof r[c.name] === 'number' ? r[c.name] as number : String(r[c.name] ?? ''))), editingChart.title); } },
+  ]);
   const filtered = charts.filter((c) => (!search || c.title.includes(search)) && (typeFilter === 'all' || c.chartType === typeFilter));
   // 函数型 option（renderItem/formatter）无法持久化（存储时被剥离），读取时用图表配置重建
   const renderOption = (c: ChartConfig): Record<string, unknown> => {
@@ -504,7 +514,7 @@ export default function ChartsPage() {
       id: generateId(), title: '新建图表', chartType: 'bar', datasetId: currentDataset.id,
       columnMapping: {}, echartsOption: simpleOption(currentDataset, 'bar', '新建图表', 'grayscale'),
       colorScheme: 'grayscale', legendPosition: 'right', fontSize: 12,
-      xAxisLabel: '', yAxisLabel: '', createdAt: Date.now(),
+      xAxisLabel: '', yAxisLabel: '', animationDuration: 1000, animationEasing: 'cubicOut', createdAt: Date.now(),
     };
     addChart(cfg); setEditingChart(cfg.id);
   };
@@ -579,11 +589,19 @@ export default function ChartsPage() {
                 <Text style={{ fontSize: 12, color: '#94a3b8' }}>字体大小</Text>
                 <Select size="small" value={chart.fontSize} onChange={(v: number) => addChart({ ...chart, fontSize: v })}
                   options={[10, 12, 14, 16, 18, 20].map((n) => ({ label: `${n}px`, value: n }))} />
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>动画时长</Text>
+                <Select size="small" value={chart.animationDuration ?? 1000} onChange={(v: number) => addChart({ ...chart, animationDuration: v })}
+                  options={[{ label: '关闭', value: 0 }, { label: '0.3 秒', value: 300 }, { label: '1 秒', value: 1000 }, { label: '2 秒', value: 2000 }]} />
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>动画缓动</Text>
+                <Select size="small" value={chart.animationEasing ?? 'cubicOut'} onChange={(v: string) => addChart({ ...chart, animationEasing: v })}
+                  options={[{ label: '线性', value: 'linear' }, { label: '三次缓出', value: 'cubicOut' }, { label: '回弹', value: 'elasticOut' }, { label: '弹跳', value: 'bounceOut' }]} />
+                <Button icon={<DownloadOutlined />} onClick={() => echartsRef && exportPNG(echartsRef.getEchartsInstance(), chart.title)} block>导出 PNG</Button>
+                <Button icon={<DownloadOutlined />} onClick={() => { if (echartsRef) { if (!exportSVG(echartsRef.getEchartsInstance(), chart.title)) message.warning('3D 图表不支持 SVG 导出，请使用 PNG'); } }} block>导出 SVG</Button>
+                <Button icon={<DownloadOutlined />} onClick={() => { if (currentDataset) exportCSV(currentDataset.columns.map((c) => c.name), currentDataset.rows.map((r) => currentDataset.columns.map((c) => String(r[c.name] ?? ''))), chart.title); }} block>导出 CSV</Button>
+                <Button icon={<DownloadOutlined />} onClick={() => { if (currentDataset) exportXLSX(currentDataset.columns.map((c) => c.name), currentDataset.rows.map((r) => currentDataset.columns.map((c) => typeof r[c.name] === 'number' ? r[c.name] as number : String(r[c.name] ?? ''))), chart.title); }} block>导出 Excel</Button>
+                <Button icon={<PlayCircleOutlined />} onClick={() => { const inst = echartsRef?.getEchartsInstance(); if (inst) { inst.dispatchAction({ type: 'restore' }); setTimeout(() => inst.setOption(renderOption(chart), { notMerge: true }), 60); } }} block>重播动画</Button>
+                <Popconfirm title="确认删除?" onConfirm={() => { removeChart(chart.id); setViewMode('gallery'); }}><Button danger icon={<DeleteOutlined />} block>删除</Button></Popconfirm>
               </div>
-              <Button icon={<DownloadOutlined />} onClick={() => echartsRef && exportPNG(echartsRef.getEchartsInstance(), chart.title)} block>导出 PNG</Button>
-              <Button icon={<DownloadOutlined />} onClick={() => { if (echartsRef) { if (!exportSVG(echartsRef.getEchartsInstance(), chart.title)) message.warning('3D 图表不支持 SVG 导出，请使用 PNG'); } }} block>导出 SVG</Button>
-              <Button icon={<DownloadOutlined />} onClick={() => { if (currentDataset) exportCSV(currentDataset.columns.map((c) => c.name), currentDataset.rows.map((r) => currentDataset.columns.map((c) => String(r[c.name] ?? ''))), chart.title); }} block>导出 CSV</Button>
-              <Popconfirm title="确认删除?" onConfirm={() => { removeChart(chart.id); setViewMode('gallery'); }}><Button danger icon={<DeleteOutlined />} block>删除</Button></Popconfirm>
             </Space>
           </Card>
         </div>

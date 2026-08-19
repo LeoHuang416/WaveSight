@@ -282,13 +282,14 @@ export function applyOutputFilter(
 }
 
 /** 单模块导出 CSV（表格：headers+rows；方程/结论/最优解：键值行） */
-export function moduleToCsv(mod: RenderedModule, rsmEqForm: 'coded' | 'actual' = 'coded'): string {
-  const rows: string[][] = [];
+/** 模块 → 结构化行数据（表格/方程/最优解/结论），供 CSV 与 Excel 导出复用 */
+export function moduleToRows(mod: RenderedModule, rsmEqForm: 'coded' | 'actual' = 'coded'): (string | number)[][] {
+  const rows: (string | number)[][] = [];
   if (mod.tables?.length) {
     for (const t of mod.tables) {
       rows.push([t.title]);
       rows.push(t.headers.map((h) => String(h)));
-      t.rows.forEach((r) => rows.push(r.map((v) => String(v ?? ''))));
+      t.rows.forEach((r) => rows.push(r.map((v) => v ?? '')));
     }
   } else if (mod.equation) {
     rows.push(['输出项', '内容']);
@@ -296,7 +297,7 @@ export function moduleToCsv(mod: RenderedModule, rsmEqForm: 'coded' | 'actual' =
     (mod.equation.codedDefs ?? []).forEach((d) => rows.push(['编码定义', d]));
   } else if (mod.optimal) {
     rows.push(['输出项', '内容']);
-    rows.push(['最优响应', String(mod.optimal.y)]);
+    rows.push(['最优响应', mod.optimal.y]);
     rows.push(['条件', mod.optimal.values]);
     rows.push(['类型', mod.optimal.boundary ? '边界最优' : '域内驻点']);
     rows.push(['95% 预测区间', mod.optimal.predInterval]);
@@ -304,5 +305,9 @@ export function moduleToCsv(mod: RenderedModule, rsmEqForm: 'coded' | 'actual' =
     rows.push(['输出项', '内容']);
     rows.push([mod.label, mod.conclusion]);
   }
-  return rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  return rows;
+}
+
+export function moduleToCsv(mod: RenderedModule, rsmEqForm: 'coded' | 'actual' = 'coded'): string {
+  return moduleToRows(mod, rsmEqForm).map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
 }

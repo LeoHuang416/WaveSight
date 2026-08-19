@@ -7,7 +7,7 @@ import { useDataStore } from '@/stores/useDataStore';
 import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useChartStore } from '@/stores/useChartStore';
 import { getStorageStats, exportAllData, clearAllData } from '@/db/operations';
-import { exportAllDataJSON } from '@/utils/export';
+import { exportAllDataJSON, exportAllDataXLSX } from '@/utils/export';
 import { ACCENT_PRESETS } from '@/themes';
 import type { AppearanceMode } from '@/stores/useSettingsStore';
 
@@ -53,6 +53,12 @@ export default function SettingsPage() {
     const data = await exportAllData();
     exportAllDataJSON(data);
     message.success('数据已导出');
+  };
+
+  const handleExportExcel = async () => {
+    const data = await exportAllData();
+    exportAllDataXLSX(data);
+    message.success('Excel 已导出');
   };
 
   const handleClear = () => {
@@ -174,6 +180,9 @@ export default function SettingsPage() {
           <div className="flex gap-3 pt-2">
             <button className="btn-secondary text-xs" onClick={handleExport}>
               <Download className="h-3.5 w-3.5" /> 导出全部数据 (JSON)
+            </button>
+            <button className="btn-secondary text-xs" onClick={handleExportExcel}>
+              <Download className="h-3.5 w-3.5" /> 导出全部数据 (Excel)
             </button>
             <button className="btn-secondary text-xs !text-red-400 hover:!border-red-400/30" onClick={handleClear}>
               清空全部数据

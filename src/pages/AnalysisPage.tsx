@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Button, Select, Table, Typography, Alert, Space, message, Spin, Checkbox, Tooltip, Radio, Empty } from 'antd';
+import { Button, Select, Table, Typography, Alert, Space, message, Spin, Checkbox, Tooltip, Radio, Empty, Dropdown } from 'antd';
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
 import { useLocation } from 'react-router-dom';
@@ -11,10 +11,11 @@ import { useHistoryStore } from '@/stores/useHistoryStore';
 import { useChartStore } from '@/stores/useChartStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { generateId, formatNumber } from '@/utils/format';
-import { exportPNG } from '@/utils/export';
+import { exportPNG, exportXLSX } from '@/utils/export';
+import { useHotkeys } from '@/hooks/useHotkeys';
 import { computeAnalysis, type AnalysisResultData } from '@/engine/runAnalysis';
 import {
-  OUTPUT_MODULES, defaultCheckedOutputs, applyOutputFilter, moduleToCsv,
+  OUTPUT_MODULES, defaultCheckedOutputs, applyOutputFilter, moduleToCsv, moduleToRows,
   type RenderedModule,
 } from '@/engine/outputModules';
 import type { AnalysisType, AnalysisConfig, ChartDataSource } from '@/types/analysis';
@@ -96,6 +97,11 @@ export default function AnalysisPage() {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
   const activeDef = activeSession ? ANALYSES.find((a) => a.key === activeSession.analysisType) : null;
+
+  const activeSessionRef = useRef(activeSession);
+  useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
+
+  useHotkeys([{ combo: 'ctrl+enter', callback: () => { const s = activeSessionRef.current; if (s && !s.running) void runSessionRef.current(s.id); }, scoped: true }]);
 
   const sessionDataset = useCallback((s: AnalysisSession) =>
     datasetList.find((d) => d.id === s.datasetId) ?? currentDataset, [datasetList, currentDataset]);
@@ -248,9 +254,14 @@ export default function AnalysisPage() {
   };
 
   const renderModule = (mod: RenderedModule, session: AnalysisSession) => {
-    const exportMod = () => {
-      downloadCsv(moduleToCsv(mod, session.rsmEqForm), `module-${session.analysisType}-${mod.key}-${Date.now()}.csv`);
-      message.success('已导出 CSV');
+    const exportMod = (format: 'csv' | 'xlsx') => {
+      if (format === 'xlsx') {
+        const rows = moduleToRows(mod, session.rsmEqForm);
+        exportXLSX(['输出项', '内容'], rows, `module-${session.analysisType}-${mod.key}-${Date.now()}`, mod.label);
+      } else {
+        downloadCsv(moduleToCsv(mod, session.rsmEqForm), `module-${session.analysisType}-${mod.key}-${Date.now()}.csv`);
+      }
+      message.success(`已导出 ${format.toUpperCase()}`);
     };
     const copyMod = () => {
       navigator.clipboard.writeText(moduleToCsv(mod, session.rsmEqForm))
@@ -261,7 +272,9 @@ export default function AnalysisPage() {
         <div className="flex items-center justify-between gap-2 mb-2">
           <Text strong style={{ fontSize: 12 }}>{mod.label}</Text>
           <Space size={4}>
-            <Button size="small" icon={<DownloadOutlined />} onClick={exportMod}>导出</Button>
+            <Dropdown menu={{ items: [{ key: 'csv', label: 'CSV' }, { key: 'xlsx', label: 'Excel' }], onClick: ({ key }) => exportMod(key as 'csv' | 'xlsx') }}>
+              <Button size="small" icon={<DownloadOutlined />}>导出</Button>
+            </Dropdown>
             <Button size="small" icon={<CopyOutlined />} onClick={copyMod}>复制</Button>
           </Space>
         </div>
