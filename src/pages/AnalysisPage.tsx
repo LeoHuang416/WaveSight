@@ -3,7 +3,7 @@ import { Button, Select, Table, Typography, Alert, Space, message, Spin, Checkbo
 import ReactECharts from 'echarts-for-react';
 import 'echarts-gl';
 import { useLocation } from 'react-router-dom';
-import { PlayCircleOutlined, SaveOutlined, DownloadOutlined, CopyOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, SaveOutlined, DownloadOutlined, CopyOutlined, PlusOutlined, CloseOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import PageHeader from '@/components/layout/PageHeader';
 import EmptyState from '@/components/common/EmptyState';
 import { useDataStore } from '@/stores/useDataStore';
@@ -70,6 +70,10 @@ interface AnalysisSession {
   results: AnalysisResultData | null;
   checkedOutputs: string[];
   rsmEqForm: 'coded' | 'actual';
+  /** 会话卡片是否收起（问题3） */
+  collapsed?: boolean;
+  /** 各输出模块是否收起（问题3） */
+  collapsedModules?: string[];
 }
 
 function newSession(id: string, datasetId: string, type: AnalysisType): AnalysisSession {
@@ -81,6 +85,8 @@ function newSession(id: string, datasetId: string, type: AnalysisType): Analysis
     running: false, results: null,
     checkedOutputs: defaultCheckedOutputs(type),
     rsmEqForm: 'coded',
+    collapsed: false,
+    collapsedModules: [],
   };
 }
 
@@ -233,14 +239,22 @@ export default function AnalysisPage() {
     }
   };
 
-  const saveChartToModule = async (chartData: ChartDataSource, sourceAnalysisId?: AnalysisType) => {
+  const saveChartToModule = async (chartData: ChartDataSource, session: AnalysisSession) => {
     if (!currentDataset) { message.warning('无当前数据集'); return; }
+    // 保存 RSM 类图（等高线/3D曲面/热力图）时记录 x/y/z 列，图表模块据此重建同款图
+    const columnMapping: Record<string, string | string[]> = {};
+    const chartType = chartData.chartType as ChartType;
+    if ((chartType === 'contour' || chartType === 'surface3d' || chartType === 'heatmap') && session.analysisType === 'rsm') {
+      if (session.factorCols[0]) columnMapping.xCol = session.factorCols[0];
+      if (session.factorCols[1]) columnMapping.yCol = session.factorCols[1];
+      if (session.responseCol) columnMapping.zCol = session.responseCol;
+    }
     const cfg: ChartConfig = {
-      id: generateId(), title: chartData.title, chartType: chartData.chartType as ChartType,
-      datasetId: currentDataset.id, columnMapping: {}, echartsOption: chartData.data as Record<string, unknown>,
+      id: generateId(), title: chartData.title, chartType,
+      datasetId: currentDataset.id, columnMapping, echartsOption: chartData.data as Record<string, unknown>,
       colorScheme: 'grayscale', legendPosition: 'right', fontSize: 0,
       xAxisLabel: '', yAxisLabel: '', createdAt: Date.now(),
-      sourceAnalysisId,
+      sourceAnalysisId: session.analysisType,
     };
     await addChart(cfg);
     message.success('图表已保存');
@@ -254,6 +268,11 @@ export default function AnalysisPage() {
   };
 
   const renderModule = (mod: RenderedModule, session: AnalysisSession) => {
+    const moduleCollapsed = (session.collapsedModules ?? []).includes(mod.key);
+    const toggleModule = () => {
+      const cur = session.collapsedModules ?? [];
+      updateSession(session.id, { collapsedModules: moduleCollapsed ? cur.filter((k) => k !== mod.key) : [...cur, mod.key] });
+    };
     const exportMod = (format: 'csv' | 'xlsx') => {
       if (format === 'xlsx') {
         const rows = moduleToRows(mod, session.rsmEqForm);
@@ -270,7 +289,8 @@ export default function AnalysisPage() {
     return (
       <div key={mod.key} className="border border-[var(--color-border-light)] rounded-lg p-3 bg-[var(--bg-secondary)] mb-3">
         <div className="flex items-center justify-between gap-2 mb-2">
-          <Text strong style={{ fontSize: 12 }}>{mod.label}</Text>
+          <Button type="text" size="small" style={{ padding: 0, height: 'auto' }} aria-label={`${moduleCollapsed ? '展开' : '收起'}模块 ${mod.label}`} icon={moduleCollapsed ? <DownOutlined /> : <UpOutlined />} onClick={toggleModule} />
+          <Text strong style={{ fontSize: 12, flex: 1 }}>{mod.label}</Text>
           <Space size={4}>
             <Dropdown menu={{ items: [{ key: 'csv', label: 'CSV' }, { key: 'xlsx', label: 'Excel' }], onClick: ({ key }) => exportMod(key as 'csv' | 'xlsx') }}>
               <Button size="small" icon={<DownloadOutlined />}>导出</Button>
@@ -278,6 +298,8 @@ export default function AnalysisPage() {
             <Button size="small" icon={<CopyOutlined />} onClick={copyMod}>复制</Button>
           </Space>
         </div>
+        {!moduleCollapsed && (
+          <>
         {mod.tables?.map((t, ti) => (
           <div key={ti} style={{ marginBottom: 10 }}>
             <Text strong style={{ fontSize: 12 }}>{t.title}</Text>
@@ -338,9 +360,11 @@ export default function AnalysisPage() {
                 const inst = chartRefs.current[`${session.id}:${mod.key}`]?.getEchartsInstance();
                 if (inst) exportPNG(inst, mod.chart!.title); else message.warning('图表未就绪');
               }}>导出 PNG</Button>
-              <Button size="small" icon={<SaveOutlined />} onClick={() => saveChartToModule(mod.chart!, session.analysisType)}>保存到图表模块</Button>
+              <Button size="small" icon={<SaveOutlined />} onClick={() => saveChartToModule(mod.chart!, session)}>保存到图表模块</Button>
             </Space>
           </div>
+        )}
+          </>
         )}
       </div>
     );
@@ -413,12 +437,18 @@ export default function AnalysisPage() {
                     onClick={() => setActiveSessionId(s.id)}>
                     <div className="flex items-center justify-between gap-2 mb-2" onClick={(e) => e.stopPropagation()}>
                       <Space size={6}>
+                        <Button size="small" type="text" aria-label={s.collapsed ? '展开会话' : '收起会话'} icon={s.collapsed ? <DownOutlined /> : <UpOutlined />} onClick={() => updateSession(s.id, { collapsed: !s.collapsed })} />
                         <Text strong style={{ fontSize: 13 }}>{def?.label ?? s.analysisType}</Text>
                         <Text type="secondary" style={{ fontSize: 11 }}>{ds?.name ?? '（数据集已删除）'}</Text>
                         {s.running && <Spin size="small" />}
                       </Space>
                       <Button size="small" type="text" icon={<CloseOutlined />} onClick={() => removeSession(s.id)} />
                     </div>
+                    {s.collapsed ? (
+                      <div className="text-xs text-[var(--color-text-tertiary)] py-2">
+                        已收起 · {(s.results ? applyOutputFilter(s.analysisType, s.results, s.checkedOutputs, { modelName: s.modelName }).length : 0)} 个输出模块
+                      </div>
+                    ) : (
                     <div onClick={(e) => e.stopPropagation()}>
                       {s.running ? (
                         <div className="flex justify-center py-8"><Spin /></div>
@@ -432,6 +462,7 @@ export default function AnalysisPage() {
                         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="运行分析后在此展示结果" />
                       )}
                     </div>
+                    )}
                   </div>
                 );
               })}

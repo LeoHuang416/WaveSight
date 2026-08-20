@@ -4,13 +4,64 @@
  * echarts-gl (3D) renders to a WebGL canvas that must be preserved at capture
  * time — force a synchronous re-render so `getDataURL` reads the current frame
  * instead of a cleared/blank buffer (P0-2).
+ *
+ * 3D 曲面图导出修复（问题1）：
+ * - echarts-gl 将 3D 场景绘制在独立的 WebGL canvas 上（叠加在 2D 主 canvas 之下），
+ *   而 ECharts `getDataURL` 只捕获 2D 主 canvas（标题/图例），导致主体空白。
+ * - 社区标准做法（StackOverflow 高赞 / kepler.gl）：初始化 WebGL 上下文时
+ *   `preserveDrawingBuffer: true`（见 `patchWebGLContext`），导出时把
+ *   两个 canvas 合成（GL 底层 + 2D 覆盖层）输出为一张 PNG。
  */
 import * as echarts from 'echarts';
 import * as XLSX from 'xlsx';
+
+/** 让所有 WebGL 上下文保留绘制缓冲（echarts-gl 导出 PNG 的前提）。应用启动时调用一次。 */
+export function patchWebGLContext(): void {
+  const proto = HTMLCanvasElement.prototype as unknown as { getContext: (...args: unknown[]) => unknown };
+  const orig = proto.getContext;
+  if (!orig || (orig as unknown as { __patched?: boolean }).__patched) return;
+  (orig as unknown as { __patched?: boolean }).__patched = true;
+  proto.getContext = function (this: HTMLCanvasElement, ...args: unknown[]): unknown {
+    const type = String(args[0] ?? '');
+    let attrs = (args[1] ?? {}) as Record<string, unknown>;
+    if (type === 'webgl' || type === 'experimental-webgl') {
+      attrs = { ...attrs, preserveDrawingBuffer: true };
+    }
+    return orig.apply(this, [type, attrs]);
+  };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function exportPNG(chartInstance: any, filename: string) {
   const zr = chartInstance?.getZr?.();
   try { zr?.refreshImmediately?.(); } catch { /* non-gl or unsupported */ }
+
+  // 3D/GL 图：合成 GL canvas（底层）与 2D canvas（标题/图例/坐标轴覆盖层）
+  const dom = chartInstance?.getDom?.();
+  if (dom && typeof document !== 'undefined') {
+    const canvases = Array.from(dom.querySelectorAll('canvas'));
+    const glCanvas = canvases.find((cv) => {
+      const ctx = (cv as HTMLCanvasElement).getContext('webgl') ?? (cv as HTMLCanvasElement).getContext('experimental-webgl');
+      return !!ctx;
+    });
+    const mainCanvas = canvases[0];
+    if (glCanvas && mainCanvas) {
+      const w = (glCanvas as HTMLCanvasElement).width || 800;
+      const h = (glCanvas as HTMLCanvasElement).height || 600;
+      const out = document.createElement('canvas');
+      out.width = w; out.height = h;
+      const ctx = out.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        try { ctx.drawImage(glCanvas as HTMLCanvasElement, 0, 0, w, h); } catch { /* ignore */ }
+        try { ctx.drawImage(mainCanvas as HTMLCanvasElement, 0, 0, w, h); } catch { /* ignore */ }
+        downloadURL(out.toDataURL('image/png'), `${filename}.png`);
+        return;
+      }
+    }
+  }
+
   const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
   downloadURL(url, `${filename}.png`);
 }
