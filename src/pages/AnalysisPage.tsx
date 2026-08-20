@@ -305,13 +305,13 @@ export default function AnalysisPage() {
             <Text strong style={{ fontSize: 12 }}>{t.title}</Text>
             <Table
               columns={t.headers.map((h, hi) => ({
-                title: h, dataIndex: h, key: h,
+                title: h, dataIndex: `__c${hi}`, key: `__c${hi}`,
                 ellipsis: hi === 0,
                 render: hi === 0 ? (v: unknown) => <Tooltip title={String(v)}><span>{String(v)}</span></Tooltip> : undefined,
               }))}
               dataSource={t.rows.map((row, ri) => {
                 const obj: Record<string, unknown> = { _key: ri };
-                t.headers.forEach((h, hi) => { obj[h] = typeof row[hi] === 'number' ? formatNumber(row[hi] as number, digits) : row[hi]; });
+                t.headers.forEach((h, hi) => { obj[`__c${hi}`] = typeof row[hi] === 'number' ? formatNumber(row[hi] as number, digits) : row[hi]; });
                 return obj;
               })}
               rowKey="_key" size="small" bordered pagination={false} scroll={{ x: 'max-content' }} />

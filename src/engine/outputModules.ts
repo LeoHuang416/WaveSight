@@ -9,9 +9,9 @@ import type { RSMResult } from './modeling';
 export interface OutputModuleDef {
   key: string;
   label: string;
-  /** 匹配表格（table.title 前缀，取最长匹配归组） */
+  /** 匹配表格（table.title 包含该关键字，取最长匹配归组） */
   tables?: string[];
-  /** 匹配图表（chart title 前缀） */
+  /** 匹配图表（chart title 包含该关键字） */
   charts?: string[];
   /** 特殊输出：conclusion | equation | optimal | fit */
   specials?: string[];
@@ -202,13 +202,14 @@ export function applyOutputFilter(
   const checkedSet = new Set(checked);
   const out: RenderedModule[] = [];
 
-  // 表格 → 归属"最长匹配前缀"的模块；带 columns 的模块共享同表（列拆分）
+  // 表格 → 归属"最长匹配关键字"的模块；带 columns 的模块共享同表（列拆分）
   const tableModules = mods.map((m, i) => ({ m, i })).filter(({ m }) => m.tables?.length);
   for (const tb of result.tables) {
     const cands: { m: OutputModuleDef; i: number; len: number }[] = [];
     for (const { m, i } of tableModules) {
       for (const p of m.tables!) {
-        if (tb.title.startsWith(p)) cands.push({ m, i, len: p.length });
+        // 用子串匹配（而非仅前缀），兼容标题以方法名/列名等动态信息开头的情况（如 "pearson 相关矩阵"）
+        if (tb.title.includes(p)) cands.push({ m, i, len: p.length });
       }
     }
     if (cands.length === 0) continue; // 无模块归属的表直接跳过
@@ -238,7 +239,7 @@ export function applyOutputFilter(
     let bestLen = 0;
     for (const m of chartModules) {
       for (const p of m.charts!) {
-        if (cd.title.startsWith(p) && p.length > bestLen) { best = m; bestLen = p.length; }
+        if (cd.title.includes(p) && p.length > bestLen) { best = m; bestLen = p.length; }
       }
     }
     if (!best || !checkedSet.has(best.key)) continue;

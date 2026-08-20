@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeAnalysis, type AnalysisInput } from './runAnalysis';
+import { applyOutputFilter, defaultCheckedOutputs } from './outputModules';
+import type { AnalysisType } from '@/types/analysis';
 
 function base(overrides: Partial<AnalysisInput>): AnalysisInput {
   return {
@@ -175,5 +177,45 @@ describe('computeAnalysis', () => {
     expect(r.conclusion).toContain('多因素 ANOVA');
     expect(r.chartData!.map((c) => c.chartType)).toEqual(['boxplot', 'line']);
     expect(r.chartData![1].title).toContain('交互均值图');
+  });
+
+  it('every analysis type renders all default-checked output modules (无"勾选却无输出"回归)', () => {
+    // 回归保护：曾出现标题以方法名/列名/模型名开头（如 "pearson 相关矩阵"）导致
+    // 模块匹配失败、勾选了也不输出任何内容的问题。这里对全部 18 种分析做端到端校验。
+    const rows = [
+      { x: '1', y: '2', g: 'A', A: '-1', B: '-1', Y: '80.5' },
+      { x: '2', y: '4', g: 'A', A: '1', B: '-1', Y: '81.5' },
+      { x: '3', y: '6', g: 'B', A: '-1', B: '1', Y: '83.0' },
+      { x: '4', y: '8', g: 'B', A: '1', B: '1', Y: '84.0' },
+      { x: '5', y: '10', g: 'B', A: '0', B: '0', Y: '82.0' },
+    ];
+    const cases: { type: AnalysisType; input: Partial<AnalysisInput> }[] = [
+      { type: 'descriptive', input: {} },
+      { type: 'frequency', input: { valueCols: ['g'] } },
+      { type: 'normality', input: {} },
+      { type: 'grouped-stats', input: { groupCol: 'g' } },
+      { type: 'ttest-independent', input: { valueCols: ['x'], groupCol: 'g' } },
+      { type: 'ttest-paired', input: { pairedCol1: 'x', pairedCol2: 'y' } },
+      { type: 'anova-oneway', input: { valueCols: ['x'], groupCol: 'g' } },
+      { type: 'anova-multiway', input: { factorCols: ['g', 'A'], responseCol: 'Y' } },
+      { type: 'mann-whitney', input: { valueCols: ['x'], groupCol: 'g' } },
+      { type: 'wilcoxon', input: { pairedCol1: 'x', pairedCol2: 'y' } },
+      { type: 'kruskal-wallis', input: { valueCols: ['x'], groupCol: 'g' } },
+      { type: 'chi-square', input: { valueCols: ['g'] } },
+      { type: 'correlation', input: { corrMethod: 'pearson' } },
+      { type: 'linear-regression', input: { xCols: ['x'], yCol: 'y' } },
+      { type: 'nonlinear-fit', input: { xCols: ['x'], yCol: 'y', modelName: 'linear' } },
+      { type: 'rsm', input: { factorCols: ['A', 'B'], responseCol: 'Y' } },
+      { type: 'pca', input: {} },
+      { type: 'pipeline', input: { groupCol: 'g', pipelineModels: ['correlation', 'pca'] } },
+    ];
+    for (const { type, input } of cases) {
+      const result = computeAnalysis(base({ analysisType: type, rows, ...input }));
+      const checked = defaultCheckedOutputs(type);
+      const mods = applyOutputFilter(type, result, checked, { modelName: input.modelName });
+      const missing = checked.filter((k) => !mods.some((m) => m.key === k));
+      expect(missing, `${type}: 默认勾选但未输出的模块: ${missing.join(', ')}`).toEqual([]);
+      expect(mods.length, `${type}: 未渲染任何输出模块`).toBeGreaterThan(0);
+    }
   });
 });

@@ -121,6 +121,44 @@ describe('applyOutputFilter', () => {
     expect(mods.find((m) => m.key === 'm-conclusion')!.conclusion).toBe('ok');
   });
 
+  it('correlation: matrix table + heatmap render even when method is prefixed to titles', () => {
+    // 回归：相关矩阵的表格/热力图标题以方法名开头（如 "pearson 相关矩阵"），
+    // 若按前缀匹配将无法归属到模块，勾选了也不会输出。
+    const r: AnalysisResultData = {
+      tables: [{ title: 'pearson 相关矩阵', headers: ['', 'x', 'y'], rows: [['x', 1, 0.5], ['y', 0.5, 1]] }],
+      conclusion: '',
+      chartData: [{ chartType: 'heatmap', title: 'pearson 相关矩阵', data: {} }],
+    };
+    const mods = applyOutputFilter('correlation', r, ['m-matrix', 'm-heatmap']);
+    expect(mods.map((m) => m.key)).toEqual(['m-matrix', 'm-heatmap']);
+    expect(mods[0].tables![0].title).toBe('pearson 相关矩阵');
+    expect(mods[1].chart!.title).toBe('pearson 相关矩阵');
+  });
+
+  it('ttest-independent: box chart renders when title starts with value column', () => {
+    // 箱线图标题为 "x 按 g"（列名在前），不能按 "按" 前缀匹配
+    const r: AnalysisResultData = {
+      tables: [{ title: '独立样本 t 检验', headers: ['组别', 'N'], rows: [['A', 3], ['B', 3]] }],
+      conclusion: 't = 1.0, p = 0.4。两组无显著差异。',
+      chartData: [{ chartType: 'boxplot', title: 'x 按 g', data: {} }],
+    };
+    const mods = applyOutputFilter('ttest-independent', r, ['m-table', 'm-box', 'm-conclusion']);
+    expect(mods.map((m) => m.key)).toEqual(['m-table', 'm-box', 'm-conclusion']);
+    expect(mods[1].chart!.title).toBe('x 按 g');
+  });
+
+  it('nonlinear-fit: curve chart renders when title starts with model name', () => {
+    // 拟合曲线图标题为 "exp 拟合曲线: y"（模型名在前）
+    const r: AnalysisResultData = {
+      tables: [{ title: '非线性拟合 (exp)', headers: ['参数', '估计值'], rows: [['a', 1], ['b', 2], ['c', 0]] }],
+      conclusion: 'R² = 0.98',
+      chartData: [{ chartType: 'scatter', title: 'exp 拟合曲线: y', data: {} }],
+    };
+    const mods = applyOutputFilter('nonlinear-fit', r, ['m-params', 'm-curve', 'm-fit']);
+    expect(mods.map((m) => m.key)).toEqual(['m-params', 'm-curve', 'm-fit']);
+    expect(mods[1].chart!.title).toBe('exp 拟合曲线: y');
+  });
+
   it('unchecked modules are dropped', () => {
     const mods = applyOutputFilter('linear-regression', result(), ['m-equation']);
     expect(mods).toHaveLength(1);
